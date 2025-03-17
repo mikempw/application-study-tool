@@ -1,9 +1,9 @@
 version: '3'
-
 volumes:
   prometheus:
   grafana:
-
+  clickhouse_data:
+  clickhouse_logs:
 services:
   prometheus:
     image: prom/prometheus:v2.54.1
@@ -64,6 +64,37 @@ services:
       - ./f5-analyzer:/app
     env_file: 
       - ".env"
+    environment:
+      - CLICKHOUSE_HOST=clickhouse
+      - CLICKHOUSE_PORT=9000
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=password
+      - CLICKHOUSE_DATABASE=f5_analyzer
+    depends_on:
+      - clickhouse
+    networks:
+      - 7lc_network
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.8
+    container_name: clickhouse
+    restart: unless-stopped
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native client interface
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+      - ./services/clickhouse/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      - ./services/clickhouse/config:/etc/clickhouse-server/config.d:ro
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=password
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
     networks:
       - 7lc_network
 
