@@ -3,6 +3,9 @@ import requests
 import traceback
 import urllib3
 import re
+import os
+import uuid
+from clickhouse_driver import Client
 from nginx_compatibility import check_nginx_compatibility
 from f5dc_compatibility import check_f5dc_compatibility
 from irule_analyzer import analyze_irule
@@ -11,6 +14,96 @@ from irule_analyzer import analyze_irule
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+
+def store_analysis_in_clickhouse(results, hostname, username):
+    """Store analysis results in Clickhouse database"""
+    try:
+        client = Client(
+            host=os.environ.get('CLICKHOUSE_HOST', 'clickhouse'),
+            port=int(os.environ.get('CLICKHOUSE_PORT', 9000)),
+            user=os.environ.get('CLICKHOUSE_USER', 'default'),
+            password=os.environ.get('CLICKHOUSE_PASSWORD', 'password'),
+            database=os.environ.get('CLICKHOUSE_DATABASE', 'f5_analyzer')
+        )
+        
+        # Create a unique session ID for this analysis
+        session_id = uuid.uuid4()
+        
+        # Store session data
+        client.execute(
+            "INSERT INTO analysis_sessions (id, hostname, username, summary_virtual_servers, summary_pools, summary_irules, summary_asm_policies, summary_apm_policies) VALUES",
+            [(
+                session_id,
+                hostname,
+                username,
+                results['summary']['virtual_servers'],
+                results['summary']['pools'],
+                results['summary']['irules'],
+                results['summary']['asm_policies'],
+                results['summary']['apm_policies']
+            )]
+        )
+        
+        # Store virtual server data
+        for vs in results['virtual_servers']:
+            vs_id = uuid.uuid4()
+            
+            # Convert lists to arrays for Clickhouse
+            nginx_compat = vs.get('nginx_compatibility', [])
+            f5dc_compat = vs.get('f5dc_compatibility', [])
+            f5dc_warnings = vs.get('f5dc_warnings', [])
+            
+            has_issues = 1 if (nginx_compat or f5dc_compat) else 0
+            
+            client.execute(
+                "INSERT INTO virtual_servers (id, session_id, name, partition, full_path, destination, pool, has_compatibility_issues, nginx_compatibility_issues, f5dc_compatibility_issues, f5dc_warnings) VALUES",
+                [(
+                    vs_id,
+                    session_id,
+                    vs.get('name', ''),
+                    vs.get('partition', 'Common'),
+                    vs.get('fullPath', f"/{vs.get('partition', 'Common')}/{vs.get('name', '')}"),
+                    vs.get('destination', ''),
+                    vs.get('pool', ''),
+                    has_issues,
+                    nginx_compat,
+                    f5dc_compat,
+                    f5dc_warnings
+                )]
+            )
+            
+            # Store iRule analysis data
+            if 'irules_analysis' in vs and vs['irules_analysis']:
+                for irule in vs['irules_analysis']:
+                    analysis = irule.get('analysis', {})
+                    
+                    # Extract features from each category
+                    mappable = [item.get('feature', '') for item in analysis.get('mappable', [])]
+                    alternatives = [item.get('feature', '') for item in analysis.get('alternatives', [])]
+                    unsupported = [item.get('feature', '') for item in analysis.get('unsupported', [])]
+                    warnings = [item.get('feature', '') for item in analysis.get('warnings', [])]
+                    events = list(analysis.get('events', {}).keys())
+                    
+                    client.execute(
+                        "INSERT INTO irule_analysis (session_id, virtual_server_id, name, partition, full_path, mappable_features, alternative_features, unsupported_features, warnings, events) VALUES",
+                        [(
+                            session_id,
+                            vs_id,
+                            irule.get('name', ''),
+                            irule.get('partition', 'Common'),
+                            irule.get('fullPath', irule.get('name', '')),
+                            mappable,
+                            alternatives,
+                            unsupported,
+                            warnings,
+                            events
+                        )]
+                    )
+        
+        return True, session_id
+    except Exception as e:
+        app.logger.error(f"Error storing data in Clickhouse: {str(e)}")
+        return False, str(e)
 
 class F5BIGIPAnalyzer:
     def __init__(self):
@@ -665,10 +758,191 @@ def analyze():
         password = request.form['password']
 
         results = analyzer.analyze(hostname, port, username, password)
+        
+        # Store analysis results in Clickhouse
+        store_success, session_id = store_analysis_in_clickhouse(results, hostname, username)
+        if store_success:
+            app.logger.info(f"Analysis stored in Clickhouse with session ID: {session_id}")
+            # Add the session ID to the results so it can be referenced
+            results["session_id"] = str(session_id)
+        else:
+            app.logger.warning(f"Failed to store analysis in Clickhouse: {session_id}")
+        
         return jsonify(results)
     except Exception as e:
         error_traceback = traceback.format_exc()
         app.logger.error(f"An error occurred:\n{error_traceback}")
+        return jsonify({"error": str(e), "traceback": error_traceback}), 500
+
+@app.route('/history', methods=['GET'])
+def history():
+    """View analysis history from Clickhouse"""
+    try:
+        client = Client(
+            host=os.environ.get('CLICKHOUSE_HOST', 'clickhouse'),
+            port=int(os.environ.get('CLICKHOUSE_PORT', 9000)),
+            user=os.environ.get('CLICKHOUSE_USER', 'default'),
+            password=os.environ.get('CLICKHOUSE_PASSWORD', 'password'),
+            database=os.environ.get('CLICKHOUSE_DATABASE', 'f5_analyzer')
+        )
+        
+        # Get last 100 analysis sessions
+        sessions = client.execute("""
+            SELECT 
+                id,
+                timestamp,
+                hostname,
+                username,
+                summary_virtual_servers,
+                summary_pools,
+                summary_irules,
+                summary_asm_policies,
+                summary_apm_policies
+            FROM analysis_sessions
+            ORDER BY timestamp DESC
+            LIMIT 100
+        """)
+        
+        # Format the results for display
+        history_data = []
+        for session in sessions:
+            history_data.append({
+                "id": str(session[0]),
+                "timestamp": session[1].strftime("%Y-%m-%d %H:%M:%S"),
+                "hostname": session[2],
+                "username": session[3],
+                "summary": {
+                    "virtual_servers": session[4],
+                    "pools": session[5],
+                    "irules": session[6],
+                    "asm_policies": session[7],
+                    "apm_policies": session[8]
+                }
+            })
+        
+        return jsonify({"sessions": history_data})
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        app.logger.error(f"An error retrieving history:\n{error_traceback}")
+        return jsonify({"error": str(e), "traceback": error_traceback}), 500
+
+@app.route('/session/<session_id>', methods=['GET'])
+def get_session(session_id):
+    """Get details for a specific analysis session"""
+    try:
+        client = Client(
+            host=os.environ.get('CLICKHOUSE_HOST', 'clickhouse'),
+            port=int(os.environ.get('CLICKHOUSE_PORT', 9000)),
+            user=os.environ.get('CLICKHOUSE_USER', 'default'),
+            password=os.environ.get('CLICKHOUSE_PASSWORD', 'password'),
+            database=os.environ.get('CLICKHOUSE_DATABASE', 'f5_analyzer')
+        )
+        
+        # Get session summary
+        session_data = client.execute("""
+            SELECT 
+                id,
+                timestamp,
+                hostname,
+                username,
+                summary_virtual_servers,
+                summary_pools,
+                summary_irules,
+                summary_asm_policies,
+                summary_apm_policies
+            FROM analysis_sessions
+            WHERE id = %(session_id)s
+        """, {"session_id": session_id})
+        
+        if not session_data:
+            return jsonify({"error": "Session not found"}), 404
+        
+        session = session_data[0]
+        
+        # Get virtual servers for this session
+        virtual_servers = client.execute("""
+            SELECT 
+                id,
+                name,
+                partition,
+                full_path,
+                destination,
+                pool,
+                has_compatibility_issues,
+                nginx_compatibility_issues,
+                f5dc_compatibility_issues,
+                f5dc_warnings
+            FROM virtual_servers
+            WHERE session_id = %(session_id)s
+        """, {"session_id": session_id})
+        
+        vs_data = []
+        for vs in virtual_servers:
+            vs_id = vs[0]
+            
+            # Get iRule analysis for this virtual server
+            irule_analysis = client.execute("""
+                SELECT 
+                    name,
+                    partition,
+                    full_path,
+                    mappable_features,
+                    alternative_features,
+                    unsupported_features,
+                    warnings,
+                    events
+                FROM irule_analysis
+                WHERE virtual_server_id = %(vs_id)s
+            """, {"vs_id": vs_id})
+            
+            irules_data = []
+            for ir in irule_analysis:
+                irules_data.append({
+                    "name": ir[0],
+                    "partition": ir[1],
+                    "fullPath": ir[2],
+                    "analysis": {
+                        "mappable": [{"feature": feature} for feature in ir[3]],
+                        "alternatives": [{"feature": feature} for feature in ir[4]],
+                        "unsupported": [{"feature": feature} for feature in ir[5]],
+                        "warnings": [{"feature": feature} for feature in ir[6]],
+                        "events": {event: "" for event in ir[7]}
+                    }
+                })
+            
+            vs_data.append({
+                "name": vs[1],
+                "partition": vs[2],
+                "fullPath": vs[3],
+                "destination": vs[4],
+                "pool": vs[5],
+                "has_compatibility_issues": bool(vs[6]),
+                "nginx_compatibility": vs[7],
+                "f5dc_compatibility": vs[8],
+                "f5dc_warnings": vs[9],
+                "irules_analysis": irules_data
+            })
+        
+        # Construct response
+        response = {
+            "id": str(session[0]),
+            "timestamp": session[1].strftime("%Y-%m-%d %H:%M:%S"),
+            "hostname": session[2],
+            "username": session[3],
+            "summary": {
+                "virtual_servers": session[4],
+                "pools": session[5],
+                "irules": session[6],
+                "asm_policies": session[7],
+                "apm_policies": session[8]
+            },
+            "virtual_servers": vs_data
+        }
+        
+        return jsonify(response)
+    except Exception as e:
+        error_traceback = traceback.format_exc()
+        app.logger.error(f"Error retrieving session {session_id}:\n{error_traceback}")
         return jsonify({"error": str(e), "traceback": error_traceback}), 500
 
 if __name__ == '__main__':
