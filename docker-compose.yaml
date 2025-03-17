@@ -52,5 +52,20 @@ services:
     networks:
       - 7lc_network
 
+  f5-analyzer:
+    build:
+      context: ./f5-analyzer
+      dockerfile: Dockerfile
+    container_name: f5-analyzer
+    restart: unless-stopped
+    ports:
+      - 5000:5000
+    volumes:
+      - ./f5-analyzer:/app
+    env_file: 
+      - ".env"
+    networks:
+      - 7lc_network
+
 networks:
   7lc_network:
