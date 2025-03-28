@@ -23,6 +23,25 @@ app.config['SECRET_KEY'] = secrets.token_hex(32)
 # Enable CSRF protection
 csrf = CSRFProtect(app)
 
+# Ensure session cookies are secure
+app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Not accessible via JavaScript
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Restrict cross-site requests
+app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # Session expires after 1 hour
+
+# Add security headers to all responses
+@app.after_request
+def add_security_headers(response):
+    # Prevent browsers from sniffing the MIME type
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    # XSS protection
+    response.headers['X-XSS-Protection'] = '1; mode=block' 
+    # Don't allow the site to be framed
+    response.headers['X-Frame-Options'] = 'DENY'
+    # Strict Transport Security (use only if you've set up HTTPS)
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
 # Define form for validation
 class AnalyzerForm(FlaskForm):
     hostname = StringField('Hostname', validators=[
