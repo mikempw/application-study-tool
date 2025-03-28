@@ -62,9 +62,12 @@ services:
       - 5000:5000
     volumes:
       - ./f5-analyzer:/app
+      - ./certs:/app/certs  # Mount certificate directory
     env_file: 
       - ".env"
     environment:
+      - CERT_FILE=/app/certs/cert.pem
+      - KEY_FILE=/app/certs/key.pem
       - CLICKHOUSE_HOST=clickhouse
       - CLICKHOUSE_PORT=9000
       - CLICKHOUSE_USER=default
