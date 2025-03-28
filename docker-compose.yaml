@@ -59,7 +59,8 @@ services:
     container_name: f5-analyzer
     restart: unless-stopped
     ports:
-      - 5000:5000
+      - "5000:5000"  # HTTP
+      - "5443:5443"  # HTTPS
     volumes:
       - ./f5-analyzer:/app
       - ./certs:/app/certs  # Mount certificate directory
