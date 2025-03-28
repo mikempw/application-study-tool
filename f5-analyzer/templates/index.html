@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>F5 BIG-IP Analyzer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+        h1 {
+            color: #0077be;
+            text-align: center;
+        }
+        form {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="number"], input[type="password"] {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        input[type="submit"] {
+            background-color: #0077be;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        input[type="submit"]:hover {
+            background-color: #005fa3;
+        }
+        #results {
+            margin-top: 20px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            white-space: pre-wrap;
+        }
+        .loading {
+            text-align: center;
+            padding: 20px;
+        }
+        .compatibility-section {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 5px;
+            border-left: 4px solid #ddd;
+        }
+        .compatible {
+            border-left-color: #2ecc71;
+            background-color: rgba(46, 204, 113, 0.1);
+        }
+        .incompatible {
+            border-left-color: #e74c3c;
+            background-color: rgba(231, 76, 60, 0.1);
+        }
+        .issue-list {
+            margin-top: 5px;
+            margin-bottom: 5px;
+        }
+        .detail-section {
+            margin-bottom: 20px;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 5px;
+        }
+        .detail-header {
+            margin-top: 0;
+            color: #0077be;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .info-item {
+            margin: 5px 0;
+        }
+        .collapsible {
+            background-color: #f1f1f1;
+            cursor: pointer;
+            padding: 10px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-weight: bold;
+        }
+        .active, .collapsible:hover {
+            background-color: #ddd;
+        }
+        .content {
+            padding: 0 18px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.2s ease-out;
+            background-color: white;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+        th, td {
+            text-align: left;
+            padding: 8px;
+            border-bottom: 1px solid #ddd;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        th {
+            background-color: #0077be;
+            color: white;
+        }
+        .summary-card {
+            display: flex;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            flex: 1;
+            min-width: 120px;
+            padding: 15px;
+            background-color: #f1f8ff;
+            border-radius: 5px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .summary-item h3 {
+            margin-top: 0;
+            color: #0077be;
+        }
+        .summary-item p {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 10px 0 0 0;
+        }
+        .raw-data-toggle {
+            display: block;
+            margin: 20px 0;
+            padding: 10px;
+            background-color: #f1f1f1;
+            text-align: center;
+            text-decoration: none;
+            color: #333;
+            border-radius: 5px;
+        }
+        .raw-data-toggle:hover {
+            background-color: #ddd;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .warning-section {
+            border-left-color: #f39c12;
+            background-color: rgba(243, 156, 18, 0.1);
+        }
+        .mappable-section {
+            border-left-color: #2ecc71;
+            background-color: rgba(46, 204, 113, 0.1);
+        }
+        .alternatives-section {
+            border-left-color: #f39c12;
+            background-color: rgba(243, 156, 18, 0.1);
+        }
+        .unsupported-section {
+            border-left-color: #e74c3c;
+            background-color: rgba(231, 76, 60, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <h1>F5 BIG-IP Analyzer</h1>
+    <form id="analyzeForm">
+        <label for="hostname">Hostname:</label>
+        <input type="text" id="hostname" name="hostname" required>
+        
+        <label for="port">REST API Port:</label>
+        <input type="number" id="port" name="port" value="443" required>
+        
+        <label for="username">Username:</label>
+        <input type="text" id="username" name="username" required>
+        
+        <label for="password">Password:</label>
+        <input type="password" id="password" name="password" required>
+        
+        <input type="submit" value="Analyze">
+    </form>
+    <div id="results"></div>
+
+    <script>
+document.getElementById('analyzeForm').onsubmit = function(e) {
+    e.preventDefault();
+    const results = document.getElementById('results');
+    results.innerHTML = '<div class="loading">Analyzing... This may take a few moments.</div>';
+    
+    fetch('/analyze', {
+        method: 'POST',
+        body: new FormData(this)
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        results.innerHTML = formatResults(data);
+        
+        // Add the raw data in a hidden div that can be expanded
+        const rawDataContainer = document.createElement('div');
+        rawDataContainer.innerHTML = `<a href="#" id="toggleRawData" class="raw-data-toggle">Show/Hide Raw JSON Data</a>
+                                     <pre id="rawData" style="display:none;">${JSON.stringify(data, null, 2)}</pre>`;
+        results.appendChild(rawDataContainer);
+        
+        document.getElementById('toggleRawData').addEventListener('click', function(e) {
+            e.preventDefault();
+            const rawData = document.getElementById('rawData');
+            rawData.style.display = rawData.style.display === 'none' ? 'block' : 'none';
+        });
+        
+        // Add collapsible functionality AND automatically expand some sections
+        const collapsibles = document.getElementsByClassName("collapsible");
+        for (let i = 0; i < collapsibles.length; i++) {
+            collapsibles[i].addEventListener("click", function() {
+                this.classList.toggle("active");
+                const content = this.nextElementSibling;
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + "px";
+                }
+            });
+            
+            // Auto-expand sections with "iRules Analysis" or sections containing compatibility issues
+            if (collapsibles[i].textContent.includes("iRules Analysis") || 
+                (collapsibles[i].nextElementSibling && 
+                 collapsibles[i].nextElementSibling.querySelector('.incompatible'))) {
+                // Simulate a click to expand these sections by default
+                collapsibles[i].click();
+            }
+        }
+        
+        // Auto-expand first level of virtual servers if they have compatibility issues
+        setTimeout(function() {
+            const virtualServerButtons = document.querySelectorAll('button.collapsible');
+            virtualServerButtons.forEach(button => {
+                const content = button.nextElementSibling;
+                if (content && content.querySelector('.incompatible')) {
+                    if (!button.classList.contains('active')) {
+                        button.click();
+                    }
+                }
+            });
+        }, 100);
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        results.innerHTML = `<p style="color: red;">An error occurred during analysis: ${error.message}</p>`;
+        if (error.stack) {
+            const errorDetails = document.createElement('pre');
+            errorDetails.textContent = error.stack;
+            errorDetails.style.display = 'none';
+            errorDetails.id = 'errorDetails';
+            
+            const toggleButton = document.createElement('button');
+            toggleButton.textContent = 'Show Error Details';
+            toggleButton.onclick = function() {
+                const details = document.getElementById('errorDetails');
+                if (details.style.display === 'none') {
+                    details.style.display = 'block';
+                    this.textContent = 'Hide Error Details';
+                } else {
+                    details.style.display = 'none';
+                    this.textContent = 'Show Error Details';
+                }
+            };
+            
+            results.appendChild(toggleButton);
+            results.appendChild(errorDetails);
+        }
+    });
+};
+
+function formatResults(data) {
+    let output = '<h2>Analysis Results:</h2>';
+    
+    // Create a summary card section
+    output += '<div class="summary-card">';
+    output += createSummaryItem('Virtual Servers', data.summary.virtual_servers);
+    output += createSummaryItem('Pools', data.summary.pools);
+    output += createSummaryItem('iRules', data.summary.irules);
+    output += createSummaryItem('ASM Policies', data.summary.asm_policies);
+    output += createSummaryItem('APM Policies', data.summary.apm_policies);
+    output += '</div>';
+
+    if (data.virtual_servers && data.virtual_servers.length > 0) {
+        output += '<h3>Virtual Servers Details:</h3>';
+        
+        data.virtual_servers.forEach((vs, index) => {
+            // Check if this VS has compatibility issues to modify display
+            const hasCompatibilityIssues = 
+                (vs.nginx_compatibility && vs.nginx_compatibility.length > 0) || 
+                (vs.f5dc_compatibility && vs.f5dc_compatibility.length > 0);
+            
+            // Add an indicator if there are compatibility issues
+            let vsTitle = vs.name;
+            if (vs.fullPath) {
+                vsTitle = vs.fullPath;
+            } else if (vs.partition && vs.partition !== 'Common') {
+                vsTitle = `${vs.partition}/${vs.name}`;
+            }
+            vsTitle += ` (${vs.destination})`;
+            
+            if (hasCompatibilityIssues) {
+                vsTitle += ' ⚠️'; // Add warning icon for VIPs with issues
+            }
+            
+            output += `<button class="collapsible">${vsTitle}</button>`;
+            output += '<div class="content">';
+            output += `<div class="detail-section">`;
+            output += `<h4 class="detail-header">${vs.name}</h4>`;
+            
+            if (vs.partition && vs.partition !== 'Common') {
+                output += `<p class="info-item"><strong>Partition:</strong> ${vs.partition}</p>`;
+            }
+            
+            output += `<p class="info-item"><strong>Destination:</strong> ${vs.destination}</p>`;
+            output += `<p class="info-item"><strong>Pool:</strong> ${vs.pool}</p>`;
+            
+            // Pool Members
+            if (vs.pool_members && vs.pool_members.length > 0) {
+                output += '<div class="info-item"><strong>Pool Members:</strong>';
+                output += '<table><tr><th>Name</th><th>Address</th></tr>';
+                vs.pool_members.forEach(member => {
+                    output += `<tr><td>${member.name}</td><td>${member.address}</td></tr>`;
+                });
+                output += '</table></div>';
+            } else {
+                output += '<p class="info-item"><strong>Pool Members:</strong> No pool members found.</p>';
+            }
+            
+            // iRules section with analysis
+            if (vs.irules && vs.irules.length > 0) {
+                output += '<div class="info-item"><strong>iRules:</strong><ul>';
+                vs.irules.forEach(rule => {
+                    output += `<li>${rule}</li>`;
+                });
+                output += '</ul></div>';
+                
+                // Add iRule analysis if available
+                if (vs.irules_analysis && vs.irules_analysis.length > 0) {
+                    output += `<button class="collapsible">iRules Analysis</button>`;
+                    output += `<div class="content">`;
+                    
+                    vs.irules_analysis.forEach(iruleAnalysis => {
+                        let iruleName = iruleAnalysis.name;
+                        if (iruleAnalysis.fullPath) {
+                            iruleName = iruleAnalysis.fullPath;
+                        } else if (iruleAnalysis.partition && iruleAnalysis.partition !== 'Common') {
+                            iruleName = `${iruleAnalysis.partition}/${iruleAnalysis.name}`;
+                        }
+                        
+                        output += `<h4>${iruleName}</h4>`;
+                        
+                        const analysis = iruleAnalysis.analysis;
+                        
+                        if (analysis.error) {
+                            output += `<p>Error analyzing iRule: ${analysis.error}</p>`;
+                            return;
+                        }
+                        
+                        // Check if events were found
+                        if (analysis.events && Object.keys(analysis.events).length > 0) {
+                            output += `<p><strong>Events Found:</strong></p><ul>`;
+                            for (const [eventName, eventContent] of Object.entries(analysis.events)) {
+                                output += `<li>${eventName}</li>`;
+                            }
+                            output += `</ul>`;
+                        }
+                        
+                        // Add mappable features
+                        if (analysis.mappable && analysis.mappable.length > 0) {
+                            output += `<div class="compatibility-section mappable-section">
+                                <strong>Mappable to F5 Distributed Cloud:</strong>
+                                <ul>`;
+                            analysis.mappable.forEach(item => {
+                                output += `<li>${item.feature}`;
+                                if (item.service_policy) {
+                                    output += ` - ${item.service_policy}`;
+                                }
+                                if (item.event) {
+                                    output += ` (${item.event})`;
+                                }
+                                output += `</li>`;
+                            });
+                            output += `</ul></div>`;
+                        }
+                        
+                        // Add features requiring alternatives
+                        if (analysis.alternatives && analysis.alternatives.length > 0) {
+                            output += `<div class="compatibility-section alternatives-section">
+                                <strong>Requires Alternatives in F5 Distributed Cloud:</strong>
+                                <ul>`;
+                            analysis.alternatives.forEach(item => {
+                                output += `<li>${item.feature}`;
+                                if (item.alternative) {
+                                    output += ` - ${item.alternative}`;
+                                }
+                                if (item.event) {
+                                    output += ` (${item.event})`;
+                                }
+                                output += `</li>`;
+                            });
+                            output += `</ul></div>`;
+                        }
+                        
+                        // Add unsupported features
+                        if (analysis.unsupported && analysis.unsupported.length > 0) {
+                            output += `<div class="compatibility-section unsupported-section">
+                                <strong>Not Supported in F5 Distributed Cloud:</strong>
+                                <ul>`;
+                            analysis.unsupported.forEach(item => {
+                                output += `<li>${item.feature}`;
+                                if (item.note) {
+                                    output += ` - ${item.note}`;
+                                }
+                                if (item.event) {
+                                    output += ` (${item.event})`;
+                                }
+                                output += `</li>`;
+                            });
+                            output += `</ul></div>`;
+                        }
+                        
+                        // Add warnings
+                        if (analysis.warnings && analysis.warnings.length > 0) {
+                            output += `<div class="compatibility-section warning-section">
+                                <strong>Migration Considerations:</strong>
+                                <ul>`;
+                            analysis.warnings.forEach(item => {
+                                output += `<li>${item.feature}`;
+                                if (item.note) {
+                                    output += ` - ${item.note}`;
+                                }
+                                if (item.event) {
+                                    output += ` (${item.event})`;
+                                }
+                                output += `</li>`;
+                            });
+                            output += `</ul></div>`;
+                        }
+                    });
+                    
+                    output += `</div>`; // Close the content div
+                }
+            } else {
+                output += '<p class="info-item"><strong>iRules:</strong> No iRules found.</p>';
+            }
+            
+            // Compatibility sections
+            output += createCompatibilitySection('NGINX', vs.nginx_compatibility);
+            output += createCompatibilitySection('F5 Distributed Cloud', vs.f5dc_compatibility);
+            
+            // F5 Distributed Cloud Warnings section (new)
+            if (vs.f5dc_warnings && vs.f5dc_warnings.length > 0) {
+                output += `
+                    <div class="compatibility-section warning-section">
+                        <strong>F5 Distributed Cloud Warnings:</strong>
+                        <ul class="issue-list">
+                            ${vs.f5dc_warnings.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>
+                `;
+            }
+            
+            output += '</div>'; // Close detail-section
+            output += '</div>'; // Close content
+        });
+    } else {
+        output += '<p>No virtual servers found.</p>';
+    }
+
+    return output;
+}
+
+function createSummaryItem(title, count) {
+    return `
+        <div class="summary-item">
+            <h3>${title}</h3>
+            <p>${count}</p>
+        </div>
+    `;
+}
+
+function createCompatibilitySection(name, issues) {
+    if (issues && issues.length > 0) {
+        return `
+            <div class="compatibility-section incompatible">
+                <strong>${name} Compatibility Issues:</strong>
+                <ul class="issue-list">
+                    ${issues.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else {
+        return `
+            <div class="compatibility-section compatible">
+                <strong>${name} Compatibility:</strong> ✓ Fully compatible
+            </div>
+        `;
+    }
+}
+
+// Function to download the analysis results as JSON
+function downloadResults(data) {
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
+    const downloadAnchorNode = document.createElement('a');
+    downloadAnchorNode.setAttribute("href", dataStr);
+    downloadAnchorNode.setAttribute("download", "f5_analysis_results.json");
+    document.body.appendChild(downloadAnchorNode);
+    downloadAnchorNode.click();
+    downloadAnchorNode.remove();
+}
+
+// Console log helper for debugging
+function logObject(obj, label = 'Debug') {
+    console.log(`=== ${label} ===`);
+    console.log(JSON.stringify(obj, null, 2));
+}
+    </script>
+</body>
+</html>
