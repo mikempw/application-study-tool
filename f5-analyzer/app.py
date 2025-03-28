@@ -1,7 +1,7 @@
-from flask import Flask, render_template, request, jsonify
-from flask_wtf import FlaskForm
+from flask import Flask, render_template, request, jsonify, escape
+from flask_wtf import FlaskForm, CSRFProtect
 from wtforms import StringField, PasswordField, IntegerField
-from wtforms.validators import DataRequired, IPAddress, NumberRange
+from wtforms.validators import DataRequired, IPAddress, NumberRange, ValidationError
 import secrets
 import requests
 import traceback
@@ -14,12 +14,54 @@ from nginx_compatibility import check_nginx_compatibility
 from f5dc_compatibility import check_f5dc_compatibility
 from irule_analyzer import analyze_irule
 
-# Disable SSL warnings - in production, you'd want to handle this properly
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+# Create Flask app
 app = Flask(__name__)
+
 # Set a strong secret key for CSRF protection
-app.config['bobthebuilder123'] = secrets.token_hex(32)
+app.config['SECRET_KEY'] = secrets.token_hex(32)
+
+# Enable CSRF protection
+csrf = CSRFProtect(app)
+
+# Define form for validation
+class AnalyzerForm(FlaskForm):
+    hostname = StringField('Hostname', validators=[
+        DataRequired(message="Hostname is required")
+    ])
+    port = IntegerField('Port', validators=[
+        DataRequired(message="Port is required"),
+        NumberRange(min=1, max=65535, message="Port must be between 1 and 65535")
+    ])
+    username = StringField('Username', validators=[
+        DataRequired(message="Username is required")
+    ])
+    password = PasswordField('Password', validators=[
+        DataRequired(message="Password is required")
+    ])
+    
+    # Custom validator for hostname (allows both IP addresses and hostnames)
+    def validate_hostname(self, field):
+        # IP address pattern
+        ip_pattern = r'^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$'
+        # Hostname pattern
+        hostname_pattern = r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$'
+        
+        if re.match(ip_pattern, field.data):
+            # Validate IP address
+            octets = field.data.split('.')
+            for octet in octets:
+                if int(octet) > 255:
+                    raise ValidationError('Invalid IP address: octets must be between 0 and 255')
+        elif not re.match(hostname_pattern, field.data):
+            raise ValidationError('Invalid hostname format')
+    
+    # Custom validator for username to prevent common injection patterns
+    def validate_username(self, field):
+        forbidden_patterns = [';', '&&', '||', '`', '$', '|', '>', '<']
+        for pattern in forbidden_patterns:
+            if pattern in field.data:
+                raise ValidationError(f'Username contains invalid character: {pattern}')
+
 
 def store_analysis_in_clickhouse(results, hostname, username):
     """Store analysis results in Clickhouse database"""
@@ -122,13 +164,19 @@ class F5BIGIPAnalyzer:
             self.api_base = f"https://{hostname}:{port}/mgmt/tm"
             self.session = requests.Session()
             self.session.auth = (username, password)
-            self.session.verify = False  # In production, use proper certificate verification
+            
+            # In a production environment, this should be properly configured 
+            # using a valid certificate or certificate verification
+            # For now, we're maintaining the existing behavior but with a clearer warning
+            app.logger.warning("SSL certificate verification is disabled. This is insecure in production.")
+            self.session.verify = False
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
             
             # Test connection
-            print(f"Attempting to connect to {hostname}:{port} as {username}")
+            app.logger.info(f"Attempting to connect to {hostname}:{port}")
             response = self.session.get(f"{self.api_base}/sys/version")
             response.raise_for_status()
-            print("REST API connection established successfully")
+            app.logger.info("REST API connection established successfully")
             
             # Check if bash utility is available (for advanced configuration fetching)
             try:
@@ -137,57 +185,62 @@ class F5BIGIPAnalyzer:
                     json={"command": "run", "utilCmdArgs": "-c 'echo test'"}
                 )
                 bash_test.raise_for_status()
-                print("Bash utility available for advanced configuration fetching")
+                app.logger.info("Bash utility available for advanced configuration fetching")
             except Exception as e:
-                print(f"Warning: Bash utility not available - falling back to API-only mode: {str(e)}")
+                app.logger.warning(f"Bash utility not available - falling back to API-only mode: {str(e)}")
             
             # Fetch all partitions
-            print("Fetching partitions...")
+            app.logger.info("Fetching partitions...")
             partitions = self.get_partitions()
-            print(f"Found {len(partitions)} partitions")
+            app.logger.info(f"Found {len(partitions)} partitions")
 
             # Fetch configuration components across all partitions
-            print("Fetching virtual servers...")
+            app.logger.info("Fetching virtual servers...")
             virtual_servers = self.get_virtual_servers(partitions)
-            print(f"Found {len(virtual_servers)} virtual servers")
+            app.logger.info(f"Found {len(virtual_servers)} virtual servers")
             
-            print("Fetching pools...")
+            app.logger.info("Fetching pools...")
             pools = self.get_pools(partitions)
-            print(f"Found {len(pools)} pools")
+            app.logger.info(f"Found {len(pools)} pools")
             
-            print("Fetching iRules...")
+            app.logger.info("Fetching iRules...")
             irules = self.get_irules(partitions)
-            print(f"Found {len(irules)} iRules")
+            app.logger.info(f"Found {len(irules)} iRules")
             
-            print("Fetching ASM policies...")
+            app.logger.info("Fetching ASM policies...")
             asm_policies = self.get_asm_policies()
-            print(f"Found {len(asm_policies)} ASM policies")
+            app.logger.info(f"Found {len(asm_policies)} ASM policies")
             
-            print("Fetching APM policies...")
+            app.logger.info("Fetching APM policies...")
             apm_policies = self.get_apm_policies()
-            print(f"Found {len(apm_policies)} APM policies")
+            app.logger.info(f"Found {len(apm_policies)} APM policies")
             
-            print("Generating report...")
+            app.logger.info("Generating report...")
             report = self.generate_report(virtual_servers, pools, irules, asm_policies, apm_policies)
             
-            print("Analysis completed successfully")
+            app.logger.info("Analysis completed successfully")
             return report
             
         except requests.exceptions.HTTPError as http_err:
-            print(f"HTTP error: {http_err}")
+            app.logger.error(f"HTTP error: {http_err}")
             raise
         except requests.exceptions.ConnectionError as conn_err:
-            print(f"Connection error: {conn_err}")
+            app.logger.error(f"Connection error: {conn_err}")
             raise
         except requests.exceptions.Timeout as timeout_err:
-            print(f"Timeout error: {timeout_err}")
+            app.logger.error(f"Timeout error: {timeout_err}")
             raise
         except requests.exceptions.RequestException as req_err:
-            print(f"Request error: {req_err}")
+            app.logger.error(f"Request error: {req_err}")
             raise
         except Exception as e:
-            print(f"An unexpected error occurred during analysis: {str(e)}")
+            app.logger.error(f"An unexpected error occurred during analysis: {str(e)}")
             raise
+        finally:
+            # Clean up credentials after analysis
+            if hasattr(self, 'session') and self.session:
+                if hasattr(self.session, 'auth') and self.session.auth:
+                    self.session.auth = None
 
     def get_partitions(self):
         """Get all partitions from the F5 BIG-IP"""
@@ -202,7 +255,7 @@ class F5BIGIPAnalyzer:
             
             return partitions
         except Exception as e:
-            print(f"Error getting partitions: {str(e)}")
+            app.logger.error(f"Error getting partitions: {str(e)}")
             # If we can't get partitions, default to Common
             return ['Common']
 
@@ -231,7 +284,7 @@ class F5BIGIPAnalyzer:
                         cmd_response.raise_for_status()
                         config_str = cmd_response.json().get('commandResult', '')
                     except Exception as e:
-                        print(f"Warning: Could not get tmsh configuration for {vs_name}: {str(e)}")
+                        app.logger.warning(f"Could not get tmsh configuration for {vs_name}: {str(e)}")
                         config_str = str(item)  # Fallback to JSON string representation
                         
                     all_virtual_servers.append({
@@ -245,13 +298,13 @@ class F5BIGIPAnalyzer:
                 
                 return all_virtual_servers
             except Exception as e:
-                print(f"Error getting virtual servers: {str(e)}")
+                app.logger.error(f"Error getting virtual servers: {str(e)}")
                 return []
         
         # Otherwise, iterate through each partition
         for partition in partitions:
             try:
-                print(f"Fetching virtual servers from partition: {partition}")
+                app.logger.info(f"Fetching virtual servers from partition: {partition}")
                 response = self.session.get(f"{self.api_base}/ltm/virtual?$filter=partition+eq+{partition}&expandSubcollections=true")
                 response.raise_for_status()
                 data = response.json()
@@ -270,7 +323,7 @@ class F5BIGIPAnalyzer:
                         cmd_response.raise_for_status()
                         config_str = cmd_response.json().get('commandResult', '')
                     except Exception as e:
-                        print(f"Warning: Could not get tmsh configuration for {vs_name}: {str(e)}")
+                        app.logger.warning(f"Could not get tmsh configuration for {vs_name}: {str(e)}")
                         config_str = str(item)  # Fallback to JSON string representation
                         
                     all_virtual_servers.append({
@@ -282,7 +335,7 @@ class F5BIGIPAnalyzer:
                         'raw_data': item
                     })
             except Exception as e:
-                print(f"Error getting virtual servers from partition {partition}: {str(e)}")
+                app.logger.error(f"Error getting virtual servers from partition {partition}: {str(e)}")
         
         return all_virtual_servers
 
@@ -311,7 +364,7 @@ class F5BIGIPAnalyzer:
                         cmd_response.raise_for_status()
                         config_str = cmd_response.json().get('commandResult', '')
                     except Exception as e:
-                        print(f"Warning: Could not get tmsh configuration for pool {pool_name}: {str(e)}")
+                        app.logger.warning(f"Could not get tmsh configuration for pool {pool_name}: {str(e)}")
                         config_str = str(item)  # Fallback to JSON string representation
                         
                     all_pools.append({
@@ -325,13 +378,13 @@ class F5BIGIPAnalyzer:
                 
                 return all_pools
             except Exception as e:
-                print(f"Error getting pools: {str(e)}")
+                app.logger.error(f"Error getting pools: {str(e)}")
                 return []
         
         # Otherwise, iterate through each partition
         for partition in partitions:
             try:
-                print(f"Fetching pools from partition: {partition}")
+                app.logger.info(f"Fetching pools from partition: {partition}")
                 response = self.session.get(f"{self.api_base}/ltm/pool?$filter=partition+eq+{partition}&expandSubcollections=true")
                 response.raise_for_status()
                 data = response.json()
@@ -350,7 +403,7 @@ class F5BIGIPAnalyzer:
                         cmd_response.raise_for_status()
                         config_str = cmd_response.json().get('commandResult', '')
                     except Exception as e:
-                        print(f"Warning: Could not get tmsh configuration for pool {pool_name}: {str(e)}")
+                        app.logger.warning(f"Could not get tmsh configuration for pool {pool_name}: {str(e)}")
                         config_str = str(item)  # Fallback to JSON string representation
                         
                     all_pools.append({
@@ -362,7 +415,7 @@ class F5BIGIPAnalyzer:
                         'raw_data': item
                     })
             except Exception as e:
-                print(f"Error getting pools from partition {partition}: {str(e)}")
+                app.logger.error(f"Error getting pools from partition {partition}: {str(e)}")
         
         return all_pools
 
@@ -402,7 +455,7 @@ class F5BIGIPAnalyzer:
                     if content_match:
                         tcl_content = content_match.group(1).strip()
                 except Exception as e:
-                    print(f"Warning: Could not get TCL content for iRule {irule_name} via bash: {str(e)}")
+                    app.logger.warning(f"Could not get TCL content for iRule {irule_name} via bash: {str(e)}")
             
             # Use the TCL content as config if we got it, otherwise fall back to API response
             if tcl_content and 'when' in tcl_content:
@@ -432,7 +485,7 @@ class F5BIGIPAnalyzer:
                 
                 return all_irules
             except Exception as e:
-                print(f"Error getting iRules: {str(e)}")
+                app.logger.error(f"Error getting iRules: {str(e)}")
                 # Fall back to simpler approach
                 try:
                     response = self.session.get(f"{self.api_base}/ltm/rule")
@@ -450,13 +503,13 @@ class F5BIGIPAnalyzer:
                         })
                     return all_irules
                 except Exception as fallback_error:
-                    print(f"Fallback error getting iRules: {str(fallback_error)}")
+                    app.logger.error(f"Fallback error getting iRules: {str(fallback_error)}")
                     return []
         
         # Otherwise, iterate through each partition
         for partition in partitions:
             try:
-                print(f"Fetching iRules from partition: {partition}")
+                app.logger.info(f"Fetching iRules from partition: {partition}")
                 response = self.session.get(f"{self.api_base}/ltm/rule?$filter=partition+eq+{partition}&expandSubcollections=true")
                 response.raise_for_status()
                 data = response.json()
@@ -464,7 +517,7 @@ class F5BIGIPAnalyzer:
                 for item in data.get('items', []):
                     process_irule(item, partition)
             except Exception as e:
-                print(f"Error getting iRules from partition {partition}: {str(e)}")
+                app.logger.error(f"Error getting iRules from partition {partition}: {str(e)}")
                 # Try fallback approach for this partition
                 try:
                     response = self.session.get(f"{self.api_base}/ltm/rule?$filter=partition+eq+{partition}")
@@ -481,7 +534,7 @@ class F5BIGIPAnalyzer:
                             'raw_data': item
                         })
                 except Exception as fallback_error:
-                    print(f"Fallback error getting iRules from partition {partition}: {str(fallback_error)}")
+                    app.logger.error(f"Fallback error getting iRules from partition {partition}: {str(fallback_error)}")
         
         return all_irules
 
@@ -504,7 +557,7 @@ class F5BIGIPAnalyzer:
             return asm_policies
         except requests.exceptions.HTTPError:
             # ASM might not be enabled on this F5
-            print("Note: ASM module might not be enabled")
+            app.logger.info("Note: ASM module might not be enabled")
             return []
 
     def get_apm_policies(self):
@@ -526,7 +579,7 @@ class F5BIGIPAnalyzer:
             return apm_policies
         except requests.exceptions.HTTPError:
             # APM might not be enabled on this F5
-            print("Note: APM module might not be enabled")
+            app.logger.info("Note: APM module might not be enabled")
             return []
 
     def generate_report(self, virtual_servers, pools, irules, asm_policies, apm_policies):
@@ -549,7 +602,7 @@ class F5BIGIPAnalyzer:
                     analysis = analyze_irule(irule['config'])
                     report["irules_analysis"][irule['fullPath'] if 'fullPath' in irule else irule['name']] = analysis
                 except Exception as e:
-                    print(f"Error analyzing iRule {irule.get('fullPath', irule.get('name', 'unknown'))}: {str(e)}")
+                    app.logger.error(f"Error analyzing iRule {irule.get('fullPath', irule.get('name', 'unknown'))}: {str(e)}")
                     report["irules_analysis"][irule['fullPath'] if 'fullPath' in irule else irule['name']] = {"error": str(e)}
 
         for vs in virtual_servers:
@@ -749,36 +802,52 @@ class F5BIGIPAnalyzer:
                     })
         return parsed_configs
 
+
 analyzer = F5BIGIPAnalyzer()
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    # Pass a new form instance to the template
+    form = AnalyzerForm()
+    return render_template('index.html', form=form)
 
 @app.route('/analyze', methods=['POST'])
 def analyze():
-    try:
-        hostname = request.form['hostname']
-        port = request.form.get('port', 443)  # Default to HTTPS port
-        username = request.form['username']
-        password = request.form['password']
+    form = AnalyzerForm(meta={'csrf': False})  # Disable CSRF for API endpoint
+    
+    if form.validate():
+        try:
+            hostname = form.hostname.data
+            port = form.port.data
+            username = form.username.data
+            password = form.password.data
 
-        results = analyzer.analyze(hostname, port, username, password)
-        
-        # Store analysis results in Clickhouse
-        store_success, session_id = store_analysis_in_clickhouse(results, hostname, username)
-        if store_success:
-            app.logger.info(f"Analysis stored in Clickhouse with session ID: {session_id}")
-            # Add the session ID to the results so it can be referenced
-            results["session_id"] = str(session_id)
-        else:
-            app.logger.warning(f"Failed to store analysis in Clickhouse: {session_id}")
-        
-        return jsonify(results)
-    except Exception as e:
-        error_traceback = traceback.format_exc()
-        app.logger.error(f"An error occurred:\n{error_traceback}")
-        return jsonify({"error": str(e), "traceback": error_traceback}), 500
+            # Log connection attempt with minimal info
+            app.logger.info(f"Attempting to analyze F5 BIG-IP at {hostname}:{port} as user {username}")
+            
+            results = analyzer.analyze(hostname, port, username, password)
+            
+            # Clear sensitive data after use
+            password = None
+            
+            # Store analysis results in Clickhouse
+            store_success, session_id = store_analysis_in_clickhouse(results, hostname, username)
+            if store_success:
+                app.logger.info(f"Analysis stored in Clickhouse with session ID: {session_id}")
+                # Add the session ID to the results so it can be referenced
+                results["session_id"] = str(session_id)
+            else:
+                app.logger.warning(f"Failed to store analysis in Clickhouse: {session_id}")
+            
+            return jsonify(results)
+        except Exception as e:
+            error_traceback = traceback.format_exc()
+            app.logger.error(f"An error occurred:\n{error_traceback}")
+            # Return sanitized error message (avoid exposing sensitive details)
+            return jsonify({"error": f"Analysis failed: {str(e)}"}), 500
+    else:
+        # Return validation errors to client
+        return jsonify({"error": "Validation failed", "details": form.errors}), 400
 
 @app.route('/history', methods=['GET'])
 def history():
@@ -830,12 +899,16 @@ def history():
     except Exception as e:
         error_traceback = traceback.format_exc()
         app.logger.error(f"An error retrieving history:\n{error_traceback}")
-        return jsonify({"error": str(e), "traceback": error_traceback}), 500
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/session/<session_id>', methods=['GET'])
 def get_session(session_id):
     """Get details for a specific analysis session"""
     try:
+        # Sanitize session_id to prevent SQL injection
+        if not re.match(r'^[0-9a-f\-]+$', session_id):
+            return jsonify({"error": "Invalid session ID format"}), 400
+            
         client = Client(
             host=os.environ.get('CLICKHOUSE_HOST', 'clickhouse'),
             port=int(os.environ.get('CLICKHOUSE_PORT', 9000)),
@@ -949,7 +1022,8 @@ def get_session(session_id):
     except Exception as e:
         error_traceback = traceback.format_exc()
         app.logger.error(f"Error retrieving session {session_id}:\n{error_traceback}")
-        return jsonify({"error": str(e), "traceback": error_traceback}), 500
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
+    # Set debug=False for production
     app.run(host='0.0.0.0', port=5000, debug=False)
