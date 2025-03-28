@@ -1,7 +1,6 @@
-PyYAML==6.0.2
 Flask==2.0.1
 Werkzeug==2.0.1
 requests==2.26.0
 urllib3==1.26.7
 six==1.16.0
-clickhouse-driver==0.2.9
+clickhouse-driver==0.2.5
