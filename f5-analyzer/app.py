@@ -2,6 +2,7 @@ from flask import Flask, render_template, request, jsonify, escape
 from flask_wtf import FlaskForm, CSRFProtect
 from wtforms import StringField, PasswordField, IntegerField
 from wtforms.validators import DataRequired, IPAddress, NumberRange, ValidationError
+from flask_sslify import SSLify
 import secrets
 import requests
 import traceback
@@ -16,6 +17,7 @@ from irule_analyzer import analyze_irule
 
 # Create Flask app
 app = Flask(__name__)
+sslify = SSLify(app)  # Force HTTPS
 
 # Set a strong secret key for CSRF protection
 app.config['SECRET_KEY'] = secrets.token_hex(32)
