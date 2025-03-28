@@ -18,6 +18,8 @@ from irule_analyzer import analyze_irule
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
+# Set a strong secret key for CSRF protection
+app.config['bobthebuilder123'] = secrets.token_hex(32)
 
 def store_analysis_in_clickhouse(results, hostname, username):
     """Store analysis results in Clickhouse database"""
