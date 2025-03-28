@@ -188,22 +188,35 @@
             border-left-color: #e74c3c;
             background-color: rgba(231, 76, 60, 0.1);
         }
+        .error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            display: block;
+        }
     </style>
 </head>
 <body>
     <h1>F5 BIG-IP Analyzer</h1>
     <form id="analyzeForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        
         <label for="hostname">Hostname:</label>
         <input type="text" id="hostname" name="hostname" required>
+        <span class="error" id="hostname-error"></span>
         
         <label for="port">REST API Port:</label>
         <input type="number" id="port" name="port" value="443" required>
+        <span class="error" id="port-error"></span>
         
         <label for="username">Username:</label>
         <input type="text" id="username" name="username" required>
+        <span class="error" id="username-error"></span>
         
         <label for="password">Password:</label>
         <input type="password" id="password" name="password" required>
+        <span class="error" id="password-error"></span>
         
         <input type="submit" value="Analyze">
     </form>
@@ -215,13 +228,26 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
     const results = document.getElementById('results');
     results.innerHTML = '<div class="loading">Analyzing... This may take a few moments.</div>';
     
+    // Get the CSRF token from the form
+    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    
+    // Clear any previous error messages
+    document.querySelectorAll('.error').forEach(el => {
+        el.textContent = '';
+    });
+    
     fetch('/analyze', {
         method: 'POST',
+        headers: {
+            'X-CSRFToken': csrfToken
+        },
         body: new FormData(this)
     })
     .then(response => {
         if (!response.ok) {
-            throw new Error('Network response was not ok');
+            return response.json().then(data => {
+                throw { message: data.error || 'Network response was not ok', details: data.details };
+            });
         }
         return response.json();
     })
@@ -281,6 +307,17 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
     .catch(error => {
         console.error('Error:', error);
         results.innerHTML = `<p style="color: red;">An error occurred during analysis: ${error.message}</p>`;
+        
+        // Display validation errors if they exist
+        if (error.details) {
+            for (const field in error.details) {
+                const errorElement = document.getElementById(`${field}-error`);
+                if (errorElement) {
+                    errorElement.textContent = error.details[field].join(', ');
+                }
+            }
+        }
+        
         if (error.stack) {
             const errorDetails = document.createElement('pre');
             errorDetails.textContent = error.stack;
