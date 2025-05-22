@@ -17,16 +17,20 @@ from irule_analyzer import analyze_irule
 
 # Create Flask app
 app = Flask(__name__)
-sslify = SSLify(app)  # Force HTTPS
+
+# Only enable SSL enforcement in production (check for environment variable)
+if os.environ.get('FLASK_ENV') == 'production':
+    sslify = SSLify(app)  # Force HTTPS only in production
 
 # Set a strong secret key for CSRF protection
-app.config['SECRET_KEY'] = secrets.token_hex(32)
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
 
 # Enable CSRF protection
 csrf = CSRFProtect(app)
 
-# Ensure session cookies are secure
-app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
+# Ensure session cookies are secure (only in production)
+if os.environ.get('FLASK_ENV') == 'production':
+    app.config['SESSION_COOKIE_SECURE'] = True  # Only send over HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Not accessible via JavaScript
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # Restrict cross-site requests
 app.config['PERMANENT_SESSION_LIFETIME'] = 3600  # Session expires after 1 hour
@@ -40,8 +44,9 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block' 
     # Don't allow the site to be framed
     response.headers['X-Frame-Options'] = 'DENY'
-    # Strict Transport Security (use only if you've set up HTTPS)
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    # Strict Transport Security (only in production)
+    if os.environ.get('FLASK_ENV') == 'production':
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
     return response
 
 # Define form for validation
@@ -83,6 +88,8 @@ class AnalyzerForm(FlaskForm):
             if pattern in field.data:
                 raise ValidationError(f'Username contains invalid character: {pattern}')
 
+# Disable SSL warnings - in production, you'd want to handle this properly
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 def store_analysis_in_clickhouse(results, hostname, username):
     """Store analysis results in Clickhouse database"""
@@ -603,6 +610,51 @@ class F5BIGIPAnalyzer:
             app.logger.info("Note: APM module might not be enabled")
             return []
 
+    def generate_compatibility_summary(self, virtual_servers_report):
+        """
+        Generate a compatibility summary showing counts of compatible vs incompatible VIPs
+        """
+        summary = {
+            "nginx": {
+                "compatible": 0,
+                "incompatible": 0,
+                "total": len(virtual_servers_report)
+            },
+            "f5dc": {
+                "compatible": 0,
+                "incompatible": 0,
+                "total": len(virtual_servers_report)
+            },
+            "overall": {
+                "compatible": 0,
+                "incompatible": 0,
+                "total": len(virtual_servers_report)
+            }
+        }
+        
+        for vs in virtual_servers_report:
+            # NGINX compatibility check
+            nginx_issues = vs.get('nginx_compatibility', [])
+            if nginx_issues and len(nginx_issues) > 0:
+                summary["nginx"]["incompatible"] += 1
+            else:
+                summary["nginx"]["compatible"] += 1
+            
+            # F5DC compatibility check
+            f5dc_issues = vs.get('f5dc_compatibility', [])
+            if f5dc_issues and len(f5dc_issues) > 0:
+                summary["f5dc"]["incompatible"] += 1
+            else:
+                summary["f5dc"]["compatible"] += 1
+            
+            # Overall compatibility (incompatible if either nginx or f5dc has issues)
+            if (nginx_issues and len(nginx_issues) > 0) or (f5dc_issues and len(f5dc_issues) > 0):
+                summary["overall"]["incompatible"] += 1
+            else:
+                summary["overall"]["compatible"] += 1
+        
+        return summary
+
     def generate_report(self, virtual_servers, pools, irules, asm_policies, apm_policies):
         report = {
             "summary": {
@@ -718,6 +770,10 @@ class F5BIGIPAnalyzer:
             }
             report["virtual_servers"].append(vs_report)
 
+        # Generate compatibility summary
+        compatibility_summary = self.generate_compatibility_summary(report["virtual_servers"])
+        report["compatibility_summary"] = compatibility_summary
+
         return report
 
     def extract_destination(self, vs):
@@ -822,7 +878,6 @@ class F5BIGIPAnalyzer:
                         'config': config
                     })
         return parsed_configs
-
 
 analyzer = F5BIGIPAnalyzer()
 
@@ -1047,4 +1102,4 @@ def get_session(session_id):
 
 if __name__ == '__main__':
     # Set debug=False for production
-    app.run(host='0.0.0.0', port=5000, debug=False)
+    app.run(host='0.0.0.0', port=5000, debug=os.environ.get('FLASK_ENV') != 'production')
