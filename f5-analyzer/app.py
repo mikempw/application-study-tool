@@ -718,7 +718,9 @@ class F5BIGIPAnalyzer:
                             "name": matching_irule.get('name', ''),
                             "partition": matching_irule.get('partition', 'Common'),
                             "fullPath": irule_id,
-                            "analysis": irule_analysis
+                            "analysis": irule_analysis,
+                            "content": matching_irule.get('config', ''),
+                            "tcl_content": matching_irule.get('tcl_content', '')
                         })
                         
                         # Extract incompatibilities from iRule analysis
