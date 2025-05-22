@@ -32,6 +32,10 @@ def check_f5dc_compatibility(config):
         if feature in config.lower():
             incompatibilities.append(f"Uses incompatible feature: {feature}")
 
+    # Clone pools check - F5DC doesn't support clone pools
+    if has_clone_pools(config):
+        incompatibilities.append("Uses clone pools - not supported in F5 Distributed Cloud")
+
     # Port compatibility check
     port_issues = check_port_compatibility(config)
     incompatibilities.extend(port_issues)
@@ -59,6 +63,16 @@ def check_f5dc_compatibility(config):
         "incompatible": incompatibilities,
         "warnings": warnings
     }
+
+def has_clone_pools(config):
+    """Check for clone pools configuration"""
+    clone_pool_patterns = [
+        r'clone-pools\s+{',
+        r'clone-pool\s+\w+',
+        r'pool.*clone',
+        r'ltm\s+clone-pool'
+    ]
+    return any(re.search(pattern, config, re.IGNORECASE) for pattern in clone_pool_patterns)
 
 def has_oneconnect(config):
     """Check for OneConnect profile usage"""
@@ -185,6 +199,9 @@ if __name__ == "__main__":
         }
         rules {
             /Common/api-security
+        }
+        clone-pools {
+            /Common/clone-pool-example
         }
     }
     """
