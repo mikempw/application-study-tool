@@ -112,6 +112,10 @@
             transition: max-height 0.2s ease-out;
             background-color: white;
         }
+        .collapsible.active + .content {
+        max-height: none !important;
+        overflow: visible;
+        }
         table {
             border-collapse: collapse;
             width: 100%;
@@ -195,6 +199,267 @@
             margin-bottom: 10px;
             display: block;
         }
+        
+        .irule-content-section {
+            margin: 15px 0;
+            border: 1px solid #e0e0e0;
+            border-radius: 5px;
+            background-color: #fafafa;
+        }
+
+        .irule-code-toggle {
+            background-color: #f8f9fa;
+            border: none;
+            padding: 10px 15px;
+            width: 100%;
+            text-align: left;
+            font-weight: normal;
+            font-size: 14px;
+            color: #495057;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .irule-code-toggle:hover {
+            background-color: #e9ecef;
+        }
+
+        .irule-code {
+            background-color: #f8f9fa;
+            border: none;
+            padding: 15px;
+            margin: 0;
+            font-family: 'Courier New', Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow-x: auto;
+            overflow-y: auto; /* Allow vertical scrolling */
+            max-height: 400px; /* Set a reasonable max height for the code block */
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            color: #2c3e50;
+            border-radius: 0 0 5px 5px;
+            border-left: 3px solid #007bff;
+            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+        }
+
+        .irule-content-section .content {
+            background-color: #ffffff;
+            border-radius: 0 0 5px 5px;
+        }
+
+        /* Compatibility Overview Section */
+        .compatibility-overview {
+            margin: 20px 0 30px 0;
+            padding: 0;
+        }
+
+        .overview-card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-left: 6px solid #ddd;
+            transition: all 0.3s ease;
+        }
+
+        .overview-card.good {
+            border-left-color: #27ae60;
+            background: linear-gradient(135deg, #ffffff 0%, #f8fff9 100%);
+        }
+
+        .overview-card.warning {
+            border-left-color: #f39c12;
+            background: linear-gradient(135deg, #ffffff 0%, #fffbf5 100%);
+        }
+
+        .overview-card.critical {
+            border-left-color: #e74c3c;
+            background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%);
+        }
+
+        .overview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .overview-header h4 {
+            margin: 0;
+            color: #2c3e50;
+            font-size: 22px;
+            font-weight: 600;
+        }
+
+        .percentage {
+            font-size: 36px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+
+        .overview-stats {
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: 20px;
+            gap: 20px;
+        }
+
+        .stat {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat .number {
+            display: block;
+            font-size: 32px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .stat .number.compatible {
+            color: #27ae60;
+        }
+
+        .stat .number.incompatible {
+            color: #e74c3c;
+        }
+
+        .stat .number.total {
+            color: #3498db;
+        }
+
+        .stat .label {
+            font-size: 14px;
+            color: #7f8c8d;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .progress-bar {
+            height: 12px;
+            background-color: #ecf0f1;
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
+            border-radius: 6px;
+            transition: width 0.8s ease;
+            position: relative;
+        }
+
+        .overview-card.warning .progress-fill {
+            background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%);
+        }
+
+        .overview-card.critical .progress-fill {
+            background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
+        }
+
+        /* Platform Breakdown */
+        .platform-breakdown {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-top: 15px;
+        }
+
+        .platform-card {
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            border: 2px solid #ecf0f1;
+            transition: all 0.3s ease;
+        }
+
+        .platform-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .platform-card.nginx {
+            border-color: #9b59b6;
+        }
+
+        .platform-card.f5dc {
+            border-color: #e67e22;
+        }
+
+        .platform-card h5 {
+            margin: 0 0 15px 0;
+            color: #2c3e50;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        .platform-stat .big-number {
+            display: block;
+            font-size: 28px;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .platform-card.nginx .big-number {
+            color: #9b59b6;
+        }
+
+        .platform-card.f5dc .big-number {
+            color: #e67e22;
+        }
+
+        .platform-stat .breakdown {
+            font-size: 14px;
+            color: #7f8c8d;
+            font-weight: 500;
+        }
+
+        /* Enhanced existing summary section */
+        h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #ecf0f1;
+            padding-bottom: 10px;
+            margin-top: 30px;
+            margin-bottom: 20px;
+        }
+
+        /* Add some visual separation */
+        .compatibility-overview + h3 {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ecf0f1;
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .overview-stats {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .platform-breakdown {
+                grid-template-columns: 1fr;
+            }
+            
+            .overview-header {
+                flex-direction: column;
+                text-align: center;
+                gap: 10px;
+            }
+            
+            .percentage {
+                font-size: 28px;
+            }
+            
+            .stat .number {
+                font-size: 24px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -257,7 +522,7 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
         }
         results.innerHTML = formatResults(data);
         
-        // Add the raw data in a hidden div that can be expanded
+        // raw data in a hidden div that can be expanded
         const rawDataContainer = document.createElement('div');
         rawDataContainer.innerHTML = `<a href="#" id="toggleRawData" class="raw-data-toggle">Show/Hide Raw JSON Data</a>
                                      <pre id="rawData" style="display:none;">${JSON.stringify(data, null, 2)}</pre>`;
@@ -269,7 +534,7 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
             rawData.style.display = rawData.style.display === 'none' ? 'block' : 'none';
         });
         
-        // Add collapsible functionality AND automatically expand some sections
+        // collapsible functionality - KEEP ALL SECTIONS COLLAPSED BY DEFAULT
         const collapsibles = document.getElementsByClassName("collapsible");
         for (let i = 0; i < collapsibles.length; i++) {
             collapsibles[i].addEventListener("click", function() {
@@ -281,28 +546,8 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
                     content.style.maxHeight = content.scrollHeight + "px";
                 }
             });
-            
-            // Auto-expand sections with "iRules Analysis" or sections containing compatibility issues
-            if (collapsibles[i].textContent.includes("iRules Analysis") || 
-                (collapsibles[i].nextElementSibling && 
-                 collapsibles[i].nextElementSibling.querySelector('.incompatible'))) {
-                // Simulate a click to expand these sections by default
-                collapsibles[i].click();
-            }
         }
         
-        // Auto-expand first level of virtual servers if they have compatibility issues
-        setTimeout(function() {
-            const virtualServerButtons = document.querySelectorAll('button.collapsible');
-            virtualServerButtons.forEach(button => {
-                const content = button.nextElementSibling;
-                if (content && content.querySelector('.incompatible')) {
-                    if (!button.classList.contains('active')) {
-                        button.click();
-                    }
-                }
-            });
-        }, 100);
     })
     .catch(error => {
         console.error('Error:', error);
@@ -346,7 +591,70 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
 function formatResults(data) {
     let output = '<h2>Analysis Results:</h2>';
     
-    // Create a summary card section
+    // Add Compatibility Overview Section FIRST
+    if (data.compatibility_summary) {
+        output += '<h3>Compatibility Overview:</h3>';
+        output += '<div class="compatibility-overview">';
+        
+        // Overall compatibility - most important
+        const overall = data.compatibility_summary.overall;
+        const overallPercent = overall.total > 0 ? Math.round((overall.compatible / overall.total) * 100) : 0;
+        
+        output += `
+            <div class="overview-card ${overallPercent >= 70 ? 'good' : overallPercent >= 40 ? 'warning' : 'critical'}">
+                <div class="overview-header">
+                    <h4>Overall Compatible Applications</h4>
+                    <span class="percentage">${overallPercent}%</span>
+                </div>
+                <div class="overview-stats">
+                    <div class="stat">
+                        <span class="number compatible">${overall.compatible}</span>
+                        <span class="label">Ready</span>
+                    </div>
+                    <div class="stat">
+                        <span class="number incompatible">${overall.incompatible}</span>
+                        <span class="label">Need Work</span>
+                    </div>
+                    <div class="stat">
+                        <span class="number total">${overall.total}</span>
+                        <span class="label">Total VIPs</span>
+                    </div>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${overallPercent}%"></div>
+                </div>
+            </div>
+        `;
+        
+        // Platform-specific breakdown
+        const nginx = data.compatibility_summary.nginx;
+        const f5dc = data.compatibility_summary.f5dc;
+        const nginxPercent = nginx.total > 0 ? Math.round((nginx.compatible / nginx.total) * 100) : 0;
+        const f5dcPercent = f5dc.total > 0 ? Math.round((f5dc.compatible / f5dc.total) * 100) : 0;
+        
+        output += '<div class="platform-breakdown">';
+        output += `
+            <div class="platform-card nginx">
+                <h5>NGINX Plus</h5>
+                <div class="platform-stat">
+                    <span class="big-number">${nginxPercent}%</span>
+                    <span class="breakdown">${nginx.compatible}/${nginx.total} compatible</span>
+                </div>
+            </div>
+            <div class="platform-card f5dc">
+                <h5>F5 Distributed Cloud</h5>
+                <div class="platform-stat">
+                    <span class="big-number">${f5dcPercent}%</span>
+                    <span class="breakdown">${f5dc.compatible}/${f5dc.total} compatible</span>
+                </div>
+            </div>
+        `;
+        output += '</div>'; // Close platform-breakdown
+        output += '</div>'; // Close compatibility-overview
+    }
+    
+    // Create the existing summary card section
+    output += '<h3>Configuration Summary:</h3>';
     output += '<div class="summary-card">';
     output += createSummaryItem('Virtual Servers', data.summary.virtual_servers);
     output += createSummaryItem('Pools', data.summary.pools);
@@ -401,7 +709,7 @@ function formatResults(data) {
                 output += '<p class="info-item"><strong>Pool Members:</strong> No pool members found.</p>';
             }
             
-            // iRules section with analysis
+            // iRules section with analysis (SINGLE VERSION WITH iRule CONTENT)
             if (vs.irules && vs.irules.length > 0) {
                 output += '<div class="info-item"><strong>iRules:</strong><ul>';
                 vs.irules.forEach(rule => {
@@ -423,6 +731,19 @@ function formatResults(data) {
                         }
                         
                         output += `<h4>${iruleName}</h4>`;
+                        
+                        // Add the complete iRule content first
+                        if (iruleAnalysis.content || iruleAnalysis.tcl_content) {
+                            const iruleContent = iruleAnalysis.content || iruleAnalysis.tcl_content || 'Content not available';
+                            output += `
+                                <div class="irule-content-section">
+                                    <button class="collapsible irule-code-toggle">📄 Show/Hide iRule Code</button>
+                                    <div class="content">
+                                        <pre class="irule-code">${escapeHtml(iruleContent)}</pre>
+                                    </div>
+                                </div>
+                            `;
+                        }
                         
                         const analysis = iruleAnalysis.analysis;
                         
@@ -543,6 +864,13 @@ function formatResults(data) {
     }
 
     return output;
+}
+
+// helper function
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }
 
 function createSummaryItem(title, count) {
