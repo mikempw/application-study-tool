@@ -4,15 +4,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>F5 BIG-IP Analyzer</title>
+    <!-- Add D3.js libraries -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
             line-height: 1.6;
             color: #333;
-            max-width: 800px;
+            max-width: 1200px; /* Increased width to accommodate the Sankey diagram */
             margin: 0 auto;
             padding: 20px;
-            background-color: #f4f4f4;
+            background-color: #212121; /* Dark theme background */
+            color: #e0e0e0; /* Light text for dark background */
         }
         .header-redesign {
             display: flex;
@@ -25,44 +29,49 @@
         .header-redesign img {
             height: 42px;
             width: auto;
+            filter: invert(1); /* Invert the logo color for dark theme */
         }
         
         .header-redesign h1 {
-            color: #212121;
+            color: #ffffff;
             margin: 0;
             font-size: 32px;
-            font-weight: 600;
+            font-weight: 300;
+            letter-spacing: 1px;
         }    
         .separator {
             width: 1px;
             height: 32px;
-            background-color: #aaa;
+            background-color: #666;
             margin: 0 10px;
         }
         h1 {
-            color: #212121;
+            color: #ffffff;
             text-align: center;
         }
         form {
-            background-color: #fff;
+            background-color: #2a2a2a;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
         }
         label {
             display: block;
             margin-bottom: 5px;
             font-weight: bold;
+            color: #e0e0e0;
         }
         input[type="text"], input[type="number"], input[type="password"] {
             width: 100%;
             padding: 8px;
             margin-bottom: 15px;
-            border: 1px solid #ddd;
+            border: 1px solid #444;
             border-radius: 4px;
+            background-color: #333;
+            color: #e0e0e0;
         }
         input[type="submit"] {
-            background-color: #212121;
+            background-color: #444;
             color: white;
             padding: 10px 15px;
             border: none;
@@ -70,19 +79,20 @@
             cursor: pointer;
         }
         input[type="submit"]:hover {
-            background-color: #444444;
+            background-color: #555;
         }
         #results {
             margin-top: 20px;
-            background-color: #fff;
+            background-color: #2a2a2a;
             padding: 20px;
             border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
             white-space: pre-wrap;
         }
         .loading {
             text-align: center;
             padding: 20px;
+            color: #e0e0e0;
         }
         .compatibility-section {
             margin-top: 10px;
@@ -92,33 +102,35 @@
         }
         .compatible {
             border-left-color: #2ecc71;
-            background-color: rgba(46, 204, 113, 0.1);
+            background-color: rgba(46, 204, 113, 0.2);
         }
         .incompatible {
             border-left-color: #e74c3c;
-            background-color: rgba(231, 76, 60, 0.1);
+            background-color: rgba(231, 76, 60, 0.2);
         }
         .issue-list {
             margin-top: 5px;
             margin-bottom: 5px;
+            color: #e0e0e0;
         }
         .detail-section {
             margin-bottom: 20px;
             padding: 15px;
-            background-color: #f9f9f9;
+            background-color: #333;
             border-radius: 5px;
         }
         .detail-header {
             margin-top: 0;
-            color: #0077be;
-            border-bottom: 1px solid #ddd;
+            color: #e0e0e0;
+            border-bottom: 1px solid #555;
             padding-bottom: 5px;
         }
         .info-item {
             margin: 5px 0;
+            color: #e0e0e0;
         }
         .collapsible {
-            background-color: #f1f1f1;
+            background-color: #333;
             cursor: pointer;
             padding: 10px;
             width: 100%;
@@ -126,20 +138,22 @@
             text-align: left;
             outline: none;
             font-weight: bold;
+            color: #e0e0e0;
         }
         .active, .collapsible:hover {
-            background-color: #ddd;
+            background-color: #444;
         }
         .content {
             padding: 0 18px;
             max-height: 0;
             overflow: hidden;
             transition: max-height 0.2s ease-out;
-            background-color: white;
+            background-color: #2a2a2a;
+            color: #e0e0e0;
         }
         .collapsible.active + .content {
-        max-height: none !important;
-        overflow: visible;
+            max-height: none !important;
+            overflow: visible;
         }
         table {
             border-collapse: collapse;
@@ -148,13 +162,14 @@
         th, td {
             text-align: left;
             padding: 8px;
-            border-bottom: 1px solid #ddd;
+            border-bottom: 1px solid #444;
+            color: #e0e0e0;
         }
         tr:nth-child(even) {
-            background-color: #f2f2f2;
+            background-color: #333;
         }
         th {
-            background-color: #0077be;
+            background-color: #444;
             color: white;
         }
         .summary-card {
@@ -168,54 +183,66 @@
             flex: 1;
             min-width: 120px;
             padding: 15px;
-            background-color: #f1f8ff;
+            background-color: #333;
             border-radius: 5px;
             text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .summary-item:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
         }
         .summary-item h3 {
             margin-top: 0;
-            color: #0077be;
+            color: #bbb;
+            font-size: 14px;
+            font-weight: 400;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            border-bottom: none;
         }
         .summary-item p {
-            font-size: 24px;
-            font-weight: bold;
+            font-size: 28px;
+            font-weight: 300;
             margin: 10px 0 0 0;
+            color: #fff;
         }
         .raw-data-toggle {
             display: block;
             margin: 20px 0;
             padding: 10px;
-            background-color: #f1f1f1;
+            background-color: #333;
             text-align: center;
             text-decoration: none;
-            color: #333;
+            color: #e0e0e0;
             border-radius: 5px;
         }
         .raw-data-toggle:hover {
-            background-color: #ddd;
+            background-color: #444;
         }
         pre {
-            background-color: #f5f5f5;
+            background-color: #333;
             padding: 10px;
             border-radius: 5px;
             overflow-x: auto;
+            color: #e0e0e0;
         }
         .warning-section {
             border-left-color: #f39c12;
-            background-color: rgba(243, 156, 18, 0.1);
+            background-color: rgba(243, 156, 18, 0.2);
         }
         .mappable-section {
             border-left-color: #2ecc71;
-            background-color: rgba(46, 204, 113, 0.1);
+            background-color: rgba(46, 204, 113, 0.2);
         }
         .alternatives-section {
             border-left-color: #f39c12;
-            background-color: rgba(243, 156, 18, 0.1);
+            background-color: rgba(243, 156, 18, 0.2);
         }
         .unsupported-section {
             border-left-color: #e74c3c;
-            background-color: rgba(231, 76, 60, 0.1);
+            background-color: rgba(231, 76, 60, 0.2);
         }
         .error {
             color: #e74c3c;
@@ -227,29 +254,29 @@
         
         .irule-content-section {
             margin: 15px 0;
-            border: 1px solid #e0e0e0;
+            border: 1px solid #444;
             border-radius: 5px;
-            background-color: #fafafa;
+            background-color: #333;
         }
 
         .irule-code-toggle {
-            background-color: #f8f9fa;
+            background-color: #333;
             border: none;
             padding: 10px 15px;
             width: 100%;
             text-align: left;
             font-weight: normal;
             font-size: 14px;
-            color: #495057;
-            border-bottom: 1px solid #e0e0e0;
+            color: #e0e0e0;
+            border-bottom: 1px solid #444;
         }
 
         .irule-code-toggle:hover {
-            background-color: #e9ecef;
+            background-color: #444;
         }
 
         .irule-code {
-            background-color: #f8f9fa;
+            background-color: #262626;
             border: none;
             padding: 15px;
             margin: 0;
@@ -261,14 +288,13 @@
             max-height: 400px; /* Set a reasonable max height for the code block */
             white-space: pre-wrap;
             word-wrap: break-word;
-            color: #2c3e50;
+            color: #e0e0e0;
             border-radius: 0 0 5px 5px;
-            border-left: 3px solid #007bff;
-            background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
+            border-left: 3px solid #555;
         }
 
         .irule-content-section .content {
-            background-color: #ffffff;
+            background-color: #262626;
             border-radius: 0 0 5px 5px;
         }
 
@@ -279,28 +305,28 @@
         }
 
         .overview-card {
-            background: white;
+            background: #333;
             border-radius: 12px;
             padding: 25px;
             margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-            border-left: 6px solid #ddd;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            border-left: 6px solid #555;
             transition: all 0.3s ease;
         }
 
         .overview-card.good {
             border-left-color: #27ae60;
-            background: linear-gradient(135deg, #ffffff 0%, #f8fff9 100%);
+            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
         }
 
         .overview-card.warning {
             border-left-color: #f39c12;
-            background: linear-gradient(135deg, #ffffff 0%, #fffbf5 100%);
+            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
         }
 
         .overview-card.critical {
             border-left-color: #e74c3c;
-            background: linear-gradient(135deg, #ffffff 0%, #fff5f5 100%);
+            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
         }
 
         .overview-header {
@@ -312,7 +338,7 @@
 
         .overview-header h4 {
             margin: 0;
-            color: #2c3e50;
+            color: #e0e0e0;
             font-size: 22px;
             font-weight: 600;
         }
@@ -320,7 +346,7 @@
         .percentage {
             font-size: 36px;
             font-weight: bold;
-            color: #2c3e50;
+            color: #e0e0e0;
         }
 
         .overview-stats {
@@ -356,7 +382,7 @@
 
         .stat .label {
             font-size: 14px;
-            color: #7f8c8d;
+            color: #bbb;
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.5px;
@@ -364,7 +390,7 @@
 
         .progress-bar {
             height: 12px;
-            background-color: #ecf0f1;
+            background-color: #444;
             border-radius: 6px;
             overflow: hidden;
             position: relative;
@@ -395,17 +421,17 @@
         }
 
         .platform-card {
-            background: rgba(255, 255, 255, 0.8);
+            background: #333;
             border-radius: 8px;
             padding: 20px;
             text-align: center;
-            border: 2px solid #ecf0f1;
+            border: 2px solid #444;
             transition: all 0.3s ease;
         }
 
         .platform-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
         }
 
         .platform-card.nginx {
@@ -418,7 +444,7 @@
 
         .platform-card h5 {
             margin: 0 0 15px 0;
-            color: #2c3e50;
+            color: #e0e0e0;
             font-size: 16px;
             font-weight: 600;
         }
@@ -440,14 +466,14 @@
 
         .platform-stat .breakdown {
             font-size: 14px;
-            color: #7f8c8d;
+            color: #bbb;
             font-weight: 500;
         }
 
         /* Enhanced existing summary section */
         h3 {
-            color: #2c3e50;
-            border-bottom: 2px solid #ecf0f1;
+            color: #e0e0e0;
+            border-bottom: 2px solid #444;
             padding-bottom: 10px;
             margin-top: 30px;
             margin-bottom: 20px;
@@ -457,7 +483,141 @@
         .compatibility-overview + h3 {
             margin-top: 40px;
             padding-top: 20px;
-            border-top: 1px solid #ecf0f1;
+            border-top: 1px solid #444;
+        }
+
+        /* Sankey Diagram Styles */
+        .sankey-container {
+            width: 100%;
+            height: 600px;
+            background-color: #1a1a1a;
+            border-radius: 5px;
+            overflow: hidden;
+            position: relative;
+            margin-top: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .sankey-legend {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 15px 0;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+            color: #bbb;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        /* View control section */
+        .view-controls {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 15px;
+            background-color: #333;
+            border-radius: 5px;
+        }
+
+        .view-controls select, .view-controls input {
+            padding: 8px 12px;
+            background-color: #444;
+            color: #eee;
+            border: 1px solid #555;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+
+        .view-controls button {
+            padding: 8px 16px;
+            background-color: #555;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .view-controls button:hover {
+            background-color: #666;
+        }
+
+        .view-controls label {
+            color: #bbb;
+            margin-right: 8px;
+            display: inline;
+        }
+
+        /* Pagination controls */
+        .pagination {
+            display: flex;
+            justify-content: center;
+            margin: 20px 0;
+            gap: 5px;
+        }
+        
+        .pagination button {
+            background-color: #333;
+            border: 1px solid #444;
+            padding: 8px 14px;
+            cursor: pointer;
+            border-radius: 3px;
+            color: #ccc;
+            transition: all 0.2s;
+        }
+        
+        .pagination button:hover {
+            background-color: #444;
+        }
+        
+        .pagination button.active {
+            background-color: #555;
+            color: white;
+            border-color: #666;
+        }
+
+        /* Details panel for selected component */
+        .details-panel {
+            margin-top: 20px;
+            padding: 20px;
+            background-color: #333;
+            border-radius: 5px;
+            border-left: 4px solid #666;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .placeholder-panel {
+            text-align: center;
+            padding: 30px;
+            color: #999;
+        }
+
+        /* Code styling */
+        .code-keyword {
+            color: #ff79c6;
+        }
+        
+        .code-string {
+            color: #f1fa8c;
+        }
+        
+        .code-function {
+            color: #50fa7b;
+        }
+        
+        .code-comment {
+            color: #6272a4;
         }
 
         /* Responsive Design */
@@ -488,7 +648,13 @@
     </style>
 </head>
 <body>
-    <h1>F5 BIG-IP Analyzer</h1>
+    <!-- Updated header with logo and separator -->
+    <div class="header-redesign">
+        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNDAgMjQwIj48cGF0aCBkPSJNMTIwLDAgQzUzLjgsMCwwLDUzLjgsMCwxMjBzNTMuOCwxMjAsMTIwLDEyMHMxMjAtNTMuOCwxMjAtMTIwUzE4Ni4yLDAsMTIwLDB6IE0xMzUuNywxNjguMyBjLTExLjQsMTYuOC0zMS43LDIzLjItNTcuOSwyMy4ySDMwVjQ5LjFoNDcuOGMyOC4yLDAsNDguMyw2LjQsNTkuOCwyMy4yYzExLjQsMTYuOCw5LjcsNDEsMCw1Ny44IEMxNDYuNSwxNDYuOSwxNDcuMSwxNTEuNSwxMzUuNywxNjguM3ogTTEzNy41LDkxLjZjLTYuOS0xMC4xLTE5LjctMTQuNi0zOC4yLTE0LjZINTcuOXY4Ny41aDQxLjUgYzE4LjUsMCwzMS4zLTQuNSwzOC4yLTE0LjZjNi45LTEwLjEsNi45LTQ4LjIsMC01OC4zeiIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==" alt="F5 Logo">
+        <div class="separator"></div>
+        <h1>BIG-IP Analyzer</h1>
+    </div>
+    
     <form id="analyzeForm">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         
@@ -512,6 +678,7 @@
     </form>
     <div id="results"></div>
 
+    <script src="sankey.js"></script> <!-- New script file for Sankey diagram functionality -->
     <script>
 document.getElementById('analyzeForm').onsubmit = function(e) {
     e.preventDefault();
@@ -545,7 +712,15 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
         if (data.error) {
             throw new Error(data.error);
         }
+        
+        // Store the data globally for visualization
+        window.analysisData = data;
+        
+        // Render the regular results view first
         results.innerHTML = formatResults(data);
+        
+        // Render the Sankey visualization
+        initSankeyVisualization(data);
         
         // raw data in a hidden div that can be expanded
         const rawDataContainer = document.createElement('div');
@@ -573,6 +748,8 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
             });
         }
         
+        // Setup view toggle functionality
+        setupViewToggle();
     })
     .catch(error => {
         console.error('Error:', error);
@@ -615,6 +792,66 @@ document.getElementById('analyzeForm').onsubmit = function(e) {
 
 function formatResults(data) {
     let output = '<h2>Analysis Results:</h2>';
+    
+    // Add view controls for switching between different visualizations
+    output += `
+    <div class="view-controls">
+        <div>
+            <label>View as:</label>
+            <select id="viewSelector">
+                <option value="standard">Standard View</option>
+                <option value="sankey">Sankey Diagram</option>
+            </select>
+        </div>
+        <div id="filterControls" style="display: none;">
+            <label>Filter by:</label>
+            <select id="filterType">
+                <option value="all">All Applications</option>
+                <option value="http">HTTP Applications</option>
+                <option value="tcp">TCP Applications</option>
+                <option value="issues">With Compatibility Issues</option>
+            </select>
+            <input type="text" id="searchFilter" placeholder="Search by name...">
+            <button id="applyFilters">Apply</button>
+        </div>
+    </div>
+    `;
+    
+    // Add container for Sankey diagram (hidden by default)
+    output += `
+    <div id="sankeyView" style="display: none;">
+        <div id="sankeyContainer" class="sankey-container"></div>
+        
+        <div class="sankey-legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(90deg, #0d47a1, #1976d2);"></div>
+                <span>Compatible</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(90deg, #ff6f00, #ff9800);"></div>
+                <span>Requires Changes</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(90deg, #b71c1c, #e53935);"></div>
+                <span>Incompatible</span>
+            </div>
+        </div>
+        
+        <div id="paginationControls" class="pagination">
+            <!-- Pagination will be added dynamically -->
+        </div>
+        
+        <div id="detailsPanel" class="details-panel">
+            <div class="placeholder-panel">
+                <h3>Select a component to view details</h3>
+                <p>Click on any Virtual Server, Pool, Node, or iRule in the diagram above to view its details and compatibility information.</p>
+            </div>
+        </div>
+    </div>
+    `;
+    
+    // Add container for standard view
+    output += '<div id="standardView">';
     
     // Add Compatibility Overview Section FIRST
     if (data.compatibility_summary) {
@@ -887,8 +1124,61 @@ function formatResults(data) {
     } else {
         output += '<p>No virtual servers found.</p>';
     }
+    
+    output += '</div>'; // Close standardView
 
     return output;
+}
+
+// Setup toggle between standard view and Sankey diagram
+function setupViewToggle() {
+    const viewSelector = document.getElementById('viewSelector');
+    const standardView = document.getElementById('standardView');
+    const sankeyView = document.getElementById('sankeyView');
+    const filterControls = document.getElementById('filterControls');
+    
+    if (viewSelector) {
+        viewSelector.addEventListener('change', function() {
+            if (this.value === 'sankey') {
+                standardView.style.display = 'none';
+                sankeyView.style.display = 'block';
+                filterControls.style.display = 'block';
+                // Refresh the Sankey diagram (in case window was resized)
+                refreshSankeyDiagram();
+            } else {
+                standardView.style.display = 'block';
+                sankeyView.style.display = 'none';
+                filterControls.style.display = 'none';
+            }
+        });
+    }
+    
+    // Setup filter controls
+    const filterType = document.getElementById('filterType');
+    const searchFilter = document.getElementById('searchFilter');
+    const applyFiltersBtn = document.getElementById('applyFilters');
+    
+    if (applyFiltersBtn) {
+        applyFiltersBtn.addEventListener('click', function() {
+            applyFilters();
+        });
+    }
+    
+    if (searchFilter) {
+        searchFilter.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                applyFilters();
+            }
+        });
+    }
+}
+
+function applyFilters() {
+    const filterType = document.getElementById('filterType').value;
+    const searchText = document.getElementById('searchFilter').value.toLowerCase();
+    
+    // Apply filters to the Sankey diagram
+    filterSankeyData(filterType, searchText);
 }
 
 // helper function
