@@ -1,1236 +1,1054 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F5 BIG-IP Analyzer</title>
-    <!-- Add D3.js libraries -->
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="https://unpkg.com/d3-sankey@0.12.3/dist/d3-sankey.min.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            line-height: 1.6;
-            color: #333;
-            max-width: 1200px; /* Increased width to accommodate the Sankey diagram */
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #212121; /* Dark theme background */
-            color: #e0e0e0; /* Light text for dark background */
-        }
-        .header-redesign {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 15px;
-            margin: 25px 0;
-        }
-        
-        .header-redesign img {
-            height: 42px;
-            width: auto;
-            filter: invert(1); /* Invert the logo color for dark theme */
-        }
-        
-        .header-redesign h1 {
-            color: #ffffff;
-            margin: 0;
-            font-size: 32px;
-            font-weight: 300;
-            letter-spacing: 1px;
-        }    
-        .separator {
-            width: 1px;
-            height: 32px;
-            background-color: #666;
-            margin: 0 10px;
-        }
-        h1 {
-            color: #ffffff;
-            text-align: center;
-        }
-        form {
-            background-color: #2a2a2a;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-        input[type="text"], input[type="number"], input[type="password"] {
-            width: 100%;
-            padding: 8px;
-            margin-bottom: 15px;
-            border: 1px solid #444;
-            border-radius: 4px;
-            background-color: #333;
-            color: #e0e0e0;
-        }
-        input[type="submit"] {
-            background-color: #444;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        input[type="submit"]:hover {
-            background-color: #555;
-        }
-        #results {
-            margin-top: 20px;
-            background-color: #2a2a2a;
-            padding: 20px;
-            border-radius: 5px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            white-space: pre-wrap;
-        }
-        .loading {
-            text-align: center;
-            padding: 20px;
-            color: #e0e0e0;
-        }
-        .compatibility-section {
-            margin-top: 10px;
-            padding: 10px;
-            border-radius: 5px;
-            border-left: 4px solid #ddd;
-        }
-        .compatible {
-            border-left-color: #2ecc71;
-            background-color: rgba(46, 204, 113, 0.2);
-        }
-        .incompatible {
-            border-left-color: #e74c3c;
-            background-color: rgba(231, 76, 60, 0.2);
-        }
-        .issue-list {
-            margin-top: 5px;
-            margin-bottom: 5px;
-            color: #e0e0e0;
-        }
-        .detail-section {
-            margin-bottom: 20px;
-            padding: 15px;
-            background-color: #333;
-            border-radius: 5px;
-        }
-        .detail-header {
-            margin-top: 0;
-            color: #e0e0e0;
-            border-bottom: 1px solid #555;
-            padding-bottom: 5px;
-        }
-        .info-item {
-            margin: 5px 0;
-            color: #e0e0e0;
-        }
-        .collapsible {
-            background-color: #333;
-            cursor: pointer;
-            padding: 10px;
-            width: 100%;
-            border: none;
-            text-align: left;
-            outline: none;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-        .active, .collapsible:hover {
-            background-color: #444;
-        }
-        .content {
-            padding: 0 18px;
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.2s ease-out;
-            background-color: #2a2a2a;
-            color: #e0e0e0;
-        }
-        .collapsible.active + .content {
-            max-height: none !important;
-            overflow: visible;
-        }
-        table {
-            border-collapse: collapse;
-            width: 100%;
-        }
-        th, td {
-            text-align: left;
-            padding: 8px;
-            border-bottom: 1px solid #444;
-            color: #e0e0e0;
-        }
-        tr:nth-child(even) {
-            background-color: #333;
-        }
-        th {
-            background-color: #444;
-            color: white;
-        }
-        .summary-card {
-            display: flex;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .summary-item {
-            flex: 1;
-            min-width: 120px;
-            padding: 15px;
-            background-color: #333;
-            border-radius: 5px;
-            text-align: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .summary-item:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-        .summary-item h3 {
-            margin-top: 0;
-            color: #bbb;
-            font-size: 14px;
-            font-weight: 400;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            border-bottom: none;
-        }
-        .summary-item p {
-            font-size: 28px;
-            font-weight: 300;
-            margin: 10px 0 0 0;
-            color: #fff;
-        }
-        .raw-data-toggle {
-            display: block;
-            margin: 20px 0;
-            padding: 10px;
-            background-color: #333;
-            text-align: center;
-            text-decoration: none;
-            color: #e0e0e0;
-            border-radius: 5px;
-        }
-        .raw-data-toggle:hover {
-            background-color: #444;
-        }
-        pre {
-            background-color: #333;
-            padding: 10px;
-            border-radius: 5px;
-            overflow-x: auto;
-            color: #e0e0e0;
-        }
-        .warning-section {
-            border-left-color: #f39c12;
-            background-color: rgba(243, 156, 18, 0.2);
-        }
-        .mappable-section {
-            border-left-color: #2ecc71;
-            background-color: rgba(46, 204, 113, 0.2);
-        }
-        .alternatives-section {
-            border-left-color: #f39c12;
-            background-color: rgba(243, 156, 18, 0.2);
-        }
-        .unsupported-section {
-            border-left-color: #e74c3c;
-            background-color: rgba(231, 76, 60, 0.2);
-        }
-        .error {
-            color: #e74c3c;
-            font-size: 14px;
-            margin-top: -10px;
-            margin-bottom: 10px;
-            display: block;
-        }
-        
-        .irule-content-section {
-            margin: 15px 0;
-            border: 1px solid #444;
-            border-radius: 5px;
-            background-color: #333;
-        }
+/**
+ * F5 BIG-IP Analyzer - Sankey Diagram Visualization
+ * This file contains all functionality related to rendering and interacting with
+ * the Sankey diagram visualization of F5 BIG-IP configurations.
+ */
 
-        .irule-code-toggle {
-            background-color: #333;
-            border: none;
-            padding: 10px 15px;
-            width: 100%;
-            text-align: left;
-            font-weight: normal;
-            font-size: 14px;
-            color: #e0e0e0;
-            border-bottom: 1px solid #444;
-        }
+// Global variables
+let allVirtualServers = [];
+let filteredVirtualServers = [];
+let currentPage = 1;
+let itemsPerPage = 10; // Show 10 VIPs per page
+let sankeyData = null;
+let sankeyDiagram = null;
 
-        .irule-code-toggle:hover {
-            background-color: #444;
-        }
-
-        .irule-code {
-            background-color: #262626;
-            border: none;
-            padding: 15px;
-            margin: 0;
-            font-family: 'Courier New', Consolas, monospace;
-            font-size: 13px;
-            line-height: 1.4;
-            overflow-x: auto;
-            overflow-y: auto; /* Allow vertical scrolling */
-            max-height: 400px; /* Set a reasonable max height for the code block */
-            white-space: pre-wrap;
-            word-wrap: break-word;
-            color: #e0e0e0;
-            border-radius: 0 0 5px 5px;
-            border-left: 3px solid #555;
-        }
-
-        .irule-content-section .content {
-            background-color: #262626;
-            border-radius: 0 0 5px 5px;
-        }
-
-        /* Compatibility Overview Section */
-        .compatibility-overview {
-            margin: 20px 0 30px 0;
-            padding: 0;
-        }
-
-        .overview-card {
-            background: #333;
-            border-radius: 12px;
-            padding: 25px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            border-left: 6px solid #555;
-            transition: all 0.3s ease;
-        }
-
-        .overview-card.good {
-            border-left-color: #27ae60;
-            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
-        }
-
-        .overview-card.warning {
-            border-left-color: #f39c12;
-            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
-        }
-
-        .overview-card.critical {
-            border-left-color: #e74c3c;
-            background: linear-gradient(135deg, #333 0%, #2c3e50 100%);
-        }
-
-        .overview-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .overview-header h4 {
-            margin: 0;
-            color: #e0e0e0;
-            font-size: 22px;
-            font-weight: 600;
-        }
-
-        .percentage {
-            font-size: 36px;
-            font-weight: bold;
-            color: #e0e0e0;
-        }
-
-        .overview-stats {
-            display: flex;
-            justify-content: space-around;
-            margin-bottom: 20px;
-            gap: 20px;
-        }
-
-        .stat {
-            text-align: center;
-            flex: 1;
-        }
-
-        .stat .number {
-            display: block;
-            font-size: 32px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .stat .number.compatible {
-            color: #27ae60;
-        }
-
-        .stat .number.incompatible {
-            color: #e74c3c;
-        }
-
-        .stat .number.total {
-            color: #3498db;
-        }
-
-        .stat .label {
-            font-size: 14px;
-            color: #bbb;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .progress-bar {
-            height: 12px;
-            background-color: #444;
-            border-radius: 6px;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .progress-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #27ae60 0%, #2ecc71 100%);
-            border-radius: 6px;
-            transition: width 0.8s ease;
-            position: relative;
-        }
-
-        .overview-card.warning .progress-fill {
-            background: linear-gradient(90deg, #f39c12 0%, #e67e22 100%);
-        }
-
-        .overview-card.critical .progress-fill {
-            background: linear-gradient(90deg, #e74c3c 0%, #c0392b 100%);
-        }
-
-        /* Platform Breakdown */
-        .platform-breakdown {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-top: 15px;
-        }
-
-        .platform-card {
-            background: #333;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
-            border: 2px solid #444;
-            transition: all 0.3s ease;
-        }
-
-        .platform-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-        }
-
-        .platform-card.nginx {
-            border-color: #9b59b6;
-        }
-
-        .platform-card.f5dc {
-            border-color: #e67e22;
-        }
-
-        .platform-card h5 {
-            margin: 0 0 15px 0;
-            color: #e0e0e0;
-            font-size: 16px;
-            font-weight: 600;
-        }
-
-        .platform-stat .big-number {
-            display: block;
-            font-size: 28px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-
-        .platform-card.nginx .big-number {
-            color: #9b59b6;
-        }
-
-        .platform-card.f5dc .big-number {
-            color: #e67e22;
-        }
-
-        .platform-stat .breakdown {
-            font-size: 14px;
-            color: #bbb;
-            font-weight: 500;
-        }
-
-        /* Enhanced existing summary section */
-        h3 {
-            color: #e0e0e0;
-            border-bottom: 2px solid #444;
-            padding-bottom: 10px;
-            margin-top: 30px;
-            margin-bottom: 20px;
-        }
-
-        /* Add some visual separation */
-        .compatibility-overview + h3 {
-            margin-top: 40px;
-            padding-top: 20px;
-            border-top: 1px solid #444;
-        }
-
-        /* Sankey Diagram Styles */
-        .sankey-container {
-            width: 100%;
-            height: 600px;
-            background-color: #1a1a1a;
-            border-radius: 5px;
-            overflow: hidden;
-            position: relative;
-            margin-top: 20px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-
-        .sankey-legend {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin: 15px 0;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 14px;
-            color: #bbb;
-        }
-
-        .legend-color {
-            width: 20px;
-            height: 10px;
-            border-radius: 2px;
-        }
-
-        /* View control section */
-        .view-controls {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 15px;
-            padding: 15px;
-            background-color: #333;
-            border-radius: 5px;
-        }
-
-        .view-controls select, .view-controls input {
-            padding: 8px 12px;
-            background-color: #444;
-            color: #eee;
-            border: 1px solid #555;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
-
-        .view-controls button {
-            padding: 8px 16px;
-            background-color: #555;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-
-        .view-controls button:hover {
-            background-color: #666;
-        }
-
-        .view-controls label {
-            color: #bbb;
-            margin-right: 8px;
-            display: inline;
-        }
-
-        /* Pagination controls */
-        .pagination {
-            display: flex;
-            justify-content: center;
-            margin: 20px 0;
-            gap: 5px;
-        }
-        
-        .pagination button {
-            background-color: #333;
-            border: 1px solid #444;
-            padding: 8px 14px;
-            cursor: pointer;
-            border-radius: 3px;
-            color: #ccc;
-            transition: all 0.2s;
-        }
-        
-        .pagination button:hover {
-            background-color: #444;
-        }
-        
-        .pagination button.active {
-            background-color: #555;
-            color: white;
-            border-color: #666;
-        }
-
-        /* Details panel for selected component */
-        .details-panel {
-            margin-top: 20px;
-            padding: 20px;
-            background-color: #333;
-            border-radius: 5px;
-            border-left: 4px solid #666;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-
-        .placeholder-panel {
-            text-align: center;
-            padding: 30px;
-            color: #999;
-        }
-
-        /* Code styling */
-        .code-keyword {
-            color: #ff79c6;
-        }
-        
-        .code-string {
-            color: #f1fa8c;
-        }
-        
-        .code-function {
-            color: #50fa7b;
-        }
-        
-        .code-comment {
-            color: #6272a4;
-        }
-
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .overview-stats {
-                flex-direction: column;
-                gap: 15px;
-            }
-            
-            .platform-breakdown {
-                grid-template-columns: 1fr;
-            }
-            
-            .overview-header {
-                flex-direction: column;
-                text-align: center;
-                gap: 10px;
-            }
-            
-            .percentage {
-                font-size: 28px;
-            }
-            
-            .stat .number {
-                font-size: 24px;
-            }
-        }
-    </style>
-</head>
-<body>
-    <!-- Updated header with logo and separator -->
-    <div class="header-redesign">
-        <img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNDAgMjQwIj48cGF0aCBkPSJNMTIwLDAgQzUzLjgsMCwwLDUzLjgsMCwxMjBzNTMuOCwxMjAsMTIwLDEyMHMxMjAtNTMuOCwxMjAtMTIwUzE4Ni4yLDAsMTIwLDB6IE0xMzUuNywxNjguMyBjLTExLjQsMTYuOC0zMS43LDIzLjItNTcuOSwyMy4ySDMwVjQ5LjFoNDcuOGMyOC4yLDAsNDguMyw2LjQsNTkuOCwyMy4yYzExLjQsMTYuOCw5LjcsNDEsMCw1Ny44IEMxNDYuNSwxNDYuOSwxNDcuMSwxNTEuNSwxMzUuNywxNjguM3ogTTEzNy41LDkxLjZjLTYuOS0xMC4xLTE5LjctMTQuNi0zOC4yLTE0LjZINTcuOXY4Ny41aDQxLjUgYzE4LjUsMCwzMS4zLTQuNSwzOC4yLTE0LjZjNi45LTEwLjEsNi45LTQ4LjIsMC01OC4zeiIgZmlsbD0iI2ZmZmZmZiIvPjwvc3ZnPg==" alt="F5 Logo">
-        <div class="separator"></div>
-        <h1>BIG-IP Analyzer</h1>
-    </div>
+/**
+ * Initialize the Sankey diagram visualization
+ * @param {Object} data - Analysis results from the server
+ */
+function initSankeyVisualization(data) {
+    // Store all virtual servers
+    allVirtualServers = data.virtual_servers || [];
+    filteredVirtualServers = [...allVirtualServers];
     
-    <form id="analyzeForm">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-        
-        <label for="hostname">Hostname:</label>
-        <input type="text" id="hostname" name="hostname" required>
-        <span class="error" id="hostname-error"></span>
-        
-        <label for="port">REST API Port:</label>
-        <input type="number" id="port" name="port" value="443" required>
-        <span class="error" id="port-error"></span>
-        
-        <label for="username">Username:</label>
-        <input type="text" id="username" name="username" required>
-        <span class="error" id="username-error"></span>
-        
-        <label for="password">Password:</label>
-        <input type="password" id="password" name="password" required>
-        <span class="error" id="password-error"></span>
-        
-        <input type="submit" value="Analyze">
-    </form>
-    <div id="results"></div>
-    <script src="{{ url_for('static', filename='js/sankey.js') }}"></script>
-    <script>
-document.getElementById('analyzeForm').onsubmit = function(e) {
-    e.preventDefault();
-    const results = document.getElementById('results');
-    results.innerHTML = '<div class="loading">Analyzing... This may take a few moments.</div>';
+    // Setup pagination
+    setupPagination();
     
-    // Get the CSRF token from the form
-    const csrfToken = document.querySelector('input[name="csrf_token"]').value;
+    // Initial rendering
+    updateSankeyVisualization();
     
-    // Clear any previous error messages
-    document.querySelectorAll('.error').forEach(el => {
-        el.textContent = '';
-    });
-    
-    fetch('/analyze', {
-        method: 'POST',
-        headers: {
-            'X-CSRFToken': csrfToken
-        },
-        body: new FormData(this)
-    })
-    .then(response => {
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw { message: data.error || 'Network response was not ok', details: data.details };
-            });
+    // Handle window resize
+    window.addEventListener('resize', debounce(() => {
+        if (document.getElementById('sankeyView').style.display !== 'none') {
+            refreshSankeyDiagram();
         }
-        return response.json();
-    })
-    .then(data => {
-        if (data.error) {
-            throw new Error(data.error);
-        }
-        
-        // Store the data globally for visualization
-        window.analysisData = data;
-        
-        // Render the regular results view first
-        results.innerHTML = formatResults(data);
-        
-        // Render the Sankey visualization
-        initSankeyVisualization(data);
-        
-        // raw data in a hidden div that can be expanded
-        const rawDataContainer = document.createElement('div');
-        rawDataContainer.innerHTML = `<a href="#" id="toggleRawData" class="raw-data-toggle">Show/Hide Raw JSON Data</a>
-                                     <pre id="rawData" style="display:none;">${JSON.stringify(data, null, 2)}</pre>`;
-        results.appendChild(rawDataContainer);
-        
-        document.getElementById('toggleRawData').addEventListener('click', function(e) {
-            e.preventDefault();
-            const rawData = document.getElementById('rawData');
-            rawData.style.display = rawData.style.display === 'none' ? 'block' : 'none';
-        });
-        
-        // collapsible functionality - KEEP ALL SECTIONS COLLAPSED BY DEFAULT
-        const collapsibles = document.getElementsByClassName("collapsible");
-        for (let i = 0; i < collapsibles.length; i++) {
-            collapsibles[i].addEventListener("click", function() {
-                this.classList.toggle("active");
-                const content = this.nextElementSibling;
-                if (content.style.maxHeight) {
-                    content.style.maxHeight = null;
-                } else {
-                    content.style.maxHeight = content.scrollHeight + "px";
-                }
-            });
-        }
-        
-        // Setup view toggle functionality
-        setupViewToggle();
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        results.innerHTML = `<p style="color: red;">An error occurred during analysis: ${error.message}</p>`;
-        
-        // Display validation errors if they exist
-        if (error.details) {
-            for (const field in error.details) {
-                const errorElement = document.getElementById(`${field}-error`);
-                if (errorElement) {
-                    errorElement.textContent = error.details[field].join(', ');
-                }
-            }
-        }
-        
-        if (error.stack) {
-            const errorDetails = document.createElement('pre');
-            errorDetails.textContent = error.stack;
-            errorDetails.style.display = 'none';
-            errorDetails.id = 'errorDetails';
-            
-            const toggleButton = document.createElement('button');
-            toggleButton.textContent = 'Show Error Details';
-            toggleButton.onclick = function() {
-                const details = document.getElementById('errorDetails');
-                if (details.style.display === 'none') {
-                    details.style.display = 'block';
-                    this.textContent = 'Hide Error Details';
-                } else {
-                    details.style.display = 'none';
-                    this.textContent = 'Show Error Details';
-                }
-            };
-            
-            results.appendChild(toggleButton);
-            results.appendChild(errorDetails);
-        }
-    });
-};
+    }, 250));
+}
 
-function formatResults(data) {
-    let output = '<h2>Analysis Results:</h2>';
+/**
+ * Update the Sankey visualization with current data and filters
+ */
+function updateSankeyVisualization() {
+    // Get the current page of data
+    const startIdx = (currentPage - 1) * itemsPerPage;
+    const endIdx = Math.min(startIdx + itemsPerPage, filteredVirtualServers.length);
+    const paginatedVIPs = filteredVirtualServers.slice(startIdx, endIdx);
     
-    // Add view controls for switching between different visualizations
-    output += `
-    <div class="view-controls">
-        <div>
-            <label>View as:</label>
-            <select id="viewSelector">
-                <option value="standard">Standard View</option>
-                <option value="sankey">Sankey Diagram</option>
-            </select>
-        </div>
-        <div id="filterControls" style="display: none;">
-            <label>Filter by:</label>
-            <select id="filterType">
-                <option value="all">All Applications</option>
-                <option value="http">HTTP Applications</option>
-                <option value="tcp">TCP Applications</option>
-                <option value="issues">With Compatibility Issues</option>
-            </select>
-            <input type="text" id="searchFilter" placeholder="Search by name...">
-            <button id="applyFilters">Apply</button>
-        </div>
-    </div>
-    `;
+    // Prepare data for Sankey diagram
+    sankeyData = prepareDataForSankey(paginatedVIPs);
     
-    // Add container for Sankey diagram (hidden by default)
-    output += `
-    <div id="sankeyView" style="display: none;">
-        <div id="sankeyContainer" class="sankey-container"></div>
-        
-        <div class="sankey-legend">
-            <div class="legend-item">
-                <div class="legend-color" style="background: linear-gradient(90deg, #0d47a1, #1976d2);"></div>
-                <span>Compatible</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background: linear-gradient(90deg, #ff6f00, #ff9800);"></div>
-                <span>Requires Changes</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-color" style="background: linear-gradient(90deg, #b71c1c, #e53935);"></div>
-                <span>Incompatible</span>
-            </div>
-        </div>
-        
-        <div id="paginationControls" class="pagination">
-            <!-- Pagination will be added dynamically -->
-        </div>
-        
-        <div id="detailsPanel" class="details-panel">
-            <div class="placeholder-panel">
-                <h3>Select a component to view details</h3>
-                <p>Click on any Virtual Server, Pool, Node, or iRule in the diagram above to view its details and compatibility information.</p>
-            </div>
-        </div>
-    </div>
-    `;
-    
-    // Add container for standard view
-    output += '<div id="standardView">';
-    
-    // Add Compatibility Overview Section FIRST
-    if (data.compatibility_summary) {
-        output += '<h3>Compatibility Overview:</h3>';
-        output += '<div class="compatibility-overview">';
-        
-        // Overall compatibility - most important
-        const overall = data.compatibility_summary.overall;
-        const overallPercent = overall.total > 0 ? Math.round((overall.compatible / overall.total) * 100) : 0;
-        
-        output += `
-            <div class="overview-card ${overallPercent >= 70 ? 'good' : overallPercent >= 40 ? 'warning' : 'critical'}">
-                <div class="overview-header">
-                    <h4>Overall Compatible Applications</h4>
-                    <span class="percentage">${overallPercent}%</span>
-                </div>
-                <div class="overview-stats">
-                    <div class="stat">
-                        <span class="number compatible">${overall.compatible}</span>
-                        <span class="label">Ready</span>
-                    </div>
-                    <div class="stat">
-                        <span class="number incompatible">${overall.incompatible}</span>
-                        <span class="label">Need Work</span>
-                    </div>
-                    <div class="stat">
-                        <span class="number total">${overall.total}</span>
-                        <span class="label">Total VIPs</span>
-                    </div>
-                </div>
-                <div class="progress-bar">
-                    <div class="progress-fill" style="width: ${overallPercent}%"></div>
-                </div>
-            </div>
-        `;
-        
-        // Platform-specific breakdown
-        const nginx = data.compatibility_summary.nginx;
-        const f5dc = data.compatibility_summary.f5dc;
-        const nginxPercent = nginx.total > 0 ? Math.round((nginx.compatible / nginx.total) * 100) : 0;
-        const f5dcPercent = f5dc.total > 0 ? Math.round((f5dc.compatible / f5dc.total) * 100) : 0;
-        
-        output += '<div class="platform-breakdown">';
-        output += `
-            <div class="platform-card nginx">
-                <h5>NGINX Plus</h5>
-                <div class="platform-stat">
-                    <span class="big-number">${nginxPercent}%</span>
-                    <span class="breakdown">${nginx.compatible}/${nginx.total} compatible</span>
-                </div>
-            </div>
-            <div class="platform-card f5dc">
-                <h5>F5 Distributed Cloud</h5>
-                <div class="platform-stat">
-                    <span class="big-number">${f5dcPercent}%</span>
-                    <span class="breakdown">${f5dc.compatible}/${f5dc.total} compatible</span>
-                </div>
-            </div>
-        `;
-        output += '</div>'; // Close platform-breakdown
-        output += '</div>'; // Close compatibility-overview
+    // Render the diagram
+    renderSankeyDiagram(sankeyData);
+}
+
+/**
+ * Refresh the Sankey diagram (used when resizing or switching views)
+ */
+function refreshSankeyDiagram() {
+    if (sankeyData) {
+        renderSankeyDiagram(sankeyData);
     }
-    
-    // Create the existing summary card section
-    output += '<h3>Configuration Summary:</h3>';
-    output += '<div class="summary-card">';
-    output += createSummaryItem('Virtual Servers', data.summary.virtual_servers);
-    output += createSummaryItem('Pools', data.summary.pools);
-    output += createSummaryItem('iRules', data.summary.irules);
-    output += createSummaryItem('ASM Policies', data.summary.asm_policies);
-    output += createSummaryItem('APM Policies', data.summary.apm_policies);
-    output += '</div>';
+}
 
-    if (data.virtual_servers && data.virtual_servers.length > 0) {
-        output += '<h3>Virtual Servers Details:</h3>';
-        
-        data.virtual_servers.forEach((vs, index) => {
-            // Check if this VS has compatibility issues to modify display
-            const hasCompatibilityIssues = 
-                (vs.nginx_compatibility && vs.nginx_compatibility.length > 0) || 
-                (vs.f5dc_compatibility && vs.f5dc_compatibility.length > 0);
-            
-            // Add an indicator if there are compatibility issues
-            let vsTitle = vs.name;
-            if (vs.fullPath) {
-                vsTitle = vs.fullPath;
-            } else if (vs.partition && vs.partition !== 'Common') {
-                vsTitle = `${vs.partition}/${vs.name}`;
+/**
+ * Prepare data for the Sankey diagram
+ * @param {Array} virtualServers - Virtual servers to include in the diagram
+ * @returns {Object} - Data formatted for D3 Sankey
+ */
+function prepareDataForSankey(virtualServers) {
+    const nodes = [];
+    const links = [];
+    const nodeMap = {};
+    let nodeIndex = 0;
+
+    const poolsSet = new Set();
+    const nodesSet = new Set();
+    const iRulesSet = new Set();
+
+    // Collect unique pools, nodes, iRules
+    virtualServers.forEach(vs => {
+        if (vs.pool) poolsSet.add(vs.pool);
+        if (vs.pool_members) {
+            vs.pool_members.forEach(member => nodesSet.add(member.name));
+        }
+        if (vs.irules) {
+            vs.irules.forEach(rule => iRulesSet.add(rule));
+        }
+    });
+
+    // VIP nodes (column 0)
+    virtualServers.forEach(vs => {
+        const nodeId = `vip-${vs.name}`;
+        nodes.push({
+            id: nodeId,
+            name: vs.name,
+            column: 0,
+            type: 'vip',
+            details: vs
+        });
+        nodeMap[nodeId] = nodeIndex++;
+    });
+
+    // Pool nodes (column 1)
+    Array.from(poolsSet).forEach(poolName => {
+        const nodeId = `pool-${poolName}`;
+        nodes.push({
+            id: nodeId,
+            name: poolName,
+            column: 1,
+            type: 'pool'
+        });
+        nodeMap[nodeId] = nodeIndex++;
+    });
+
+    // Node members (column 2)
+    Array.from(nodesSet).forEach(nodeName => {
+        const nodeId = `node-${nodeName}`;
+        nodes.push({
+            id: nodeId,
+            name: nodeName,
+            column: 2,
+            type: 'node'
+        });
+        nodeMap[nodeId] = nodeIndex++;
+    });
+
+    // iRule nodes (column 3)
+    Array.from(iRulesSet).forEach(ruleName => {
+        const nodeId = `irule-${ruleName}`;
+        let iruleDetails = null;
+        for (const vs of virtualServers) {
+            if (vs.irules_analysis) {
+                const match = vs.irules_analysis.find(r => r.name === ruleName || r.fullPath === ruleName);
+                if (match) {
+                    iruleDetails = match;
+                    break;
+                }
             }
-            vsTitle += ` (${vs.destination})`;
-            
-            if (hasCompatibilityIssues) {
-                vsTitle += ' ⚠️'; // Add warning icon for VIPs with issues
-            }
-            
-            output += `<button class="collapsible">${vsTitle}</button>`;
-            output += '<div class="content">';
-            output += `<div class="detail-section">`;
-            output += `<h4 class="detail-header">${vs.name}</h4>`;
-            
-            if (vs.partition && vs.partition !== 'Common') {
-                output += `<p class="info-item"><strong>Partition:</strong> ${vs.partition}</p>`;
-            }
-            
-            output += `<p class="info-item"><strong>Destination:</strong> ${vs.destination}</p>`;
-            output += `<p class="info-item"><strong>Pool:</strong> ${vs.pool}</p>`;
-            
-            // Pool Members
-            if (vs.pool_members && vs.pool_members.length > 0) {
-                output += '<div class="info-item"><strong>Pool Members:</strong>';
-                output += '<table><tr><th>Name</th><th>Address</th></tr>';
-                vs.pool_members.forEach(member => {
-                    output += `<tr><td>${member.name}</td><td>${member.address}</td></tr>`;
+        }
+        nodes.push({
+            id: nodeId,
+            name: ruleName,
+            column: 3,
+            type: 'irule',
+            details: iruleDetails
+        });
+        nodeMap[nodeId] = nodeIndex++;
+    });
+
+    // Links: VIP → Pool
+    virtualServers.forEach(vs => {
+        if (vs.pool) {
+            const sourceId = `vip-${vs.name}`;
+            const targetId = `pool-${vs.pool}`;
+            if (nodeMap[sourceId] !== undefined && nodeMap[targetId] !== undefined) {
+                links.push({
+                    source: sourceId,
+                    target: targetId,
+                    value: 1,
+                    compatibility: determineCompatibility(vs)
                 });
-                output += '</table></div>';
-            } else {
-                output += '<p class="info-item"><strong>Pool Members:</strong> No pool members found.</p>';
             }
-            
-            // iRules section with analysis (SINGLE VERSION WITH iRule CONTENT)
-            if (vs.irules && vs.irules.length > 0) {
-                output += '<div class="info-item"><strong>iRules:</strong><ul>';
-                vs.irules.forEach(rule => {
-                    output += `<li>${rule}</li>`;
-                });
-                output += '</ul></div>';
-                
-                // Add iRule analysis if available
-                if (vs.irules_analysis && vs.irules_analysis.length > 0) {
-                    output += `<button class="collapsible">iRules Analysis</button>`;
-                    output += `<div class="content">`;
-                    
-                    vs.irules_analysis.forEach(iruleAnalysis => {
-                        let iruleName = iruleAnalysis.name;
-                        if (iruleAnalysis.fullPath) {
-                            iruleName = iruleAnalysis.fullPath;
-                        } else if (iruleAnalysis.partition && iruleAnalysis.partition !== 'Common') {
-                            iruleName = `${iruleAnalysis.partition}/${iruleAnalysis.name}`;
-                        }
-                        
-                        output += `<h4>${iruleName}</h4>`;
-                        
-                        // Add the complete iRule content first
-                        if (iruleAnalysis.content || iruleAnalysis.tcl_content) {
-                            const iruleContent = iruleAnalysis.content || iruleAnalysis.tcl_content || 'Content not available';
-                            output += `
-                                <div class="irule-content-section">
-                                    <button class="collapsible irule-code-toggle">📄 Show/Hide iRule Code</button>
-                                    <div class="content">
-                                        <pre class="irule-code">${escapeHtml(iruleContent)}</pre>
-                                    </div>
-                                </div>
-                            `;
-                        }
-                        
-                        const analysis = iruleAnalysis.analysis;
-                        
-                        if (analysis.error) {
-                            output += `<p>Error analyzing iRule: ${analysis.error}</p>`;
-                            return;
-                        }
-                        
-                        // Check if events were found
-                        if (analysis.events && Object.keys(analysis.events).length > 0) {
-                            output += `<p><strong>Events Found:</strong></p><ul>`;
-                            for (const [eventName, eventContent] of Object.entries(analysis.events)) {
-                                output += `<li>${eventName}</li>`;
-                            }
-                            output += `</ul>`;
-                        }
-                        
-                        // Add mappable features
-                        if (analysis.mappable && analysis.mappable.length > 0) {
-                            output += `<div class="compatibility-section mappable-section">
-                                <strong>Mappable to F5 Distributed Cloud:</strong>
-                                <ul>`;
-                            analysis.mappable.forEach(item => {
-                                output += `<li>${item.feature}`;
-                                if (item.service_policy) {
-                                    output += ` - ${item.service_policy}`;
-                                }
-                                if (item.event) {
-                                    output += ` (${item.event})`;
-                                }
-                                output += `</li>`;
-                            });
-                            output += `</ul></div>`;
-                        }
-                        
-                        // Add features requiring alternatives
-                        if (analysis.alternatives && analysis.alternatives.length > 0) {
-                            output += `<div class="compatibility-section alternatives-section">
-                                <strong>Requires Alternatives in F5 Distributed Cloud:</strong>
-                                <ul>`;
-                            analysis.alternatives.forEach(item => {
-                                output += `<li>${item.feature}`;
-                                if (item.alternative) {
-                                    output += ` - ${item.alternative}`;
-                                }
-                                if (item.event) {
-                                    output += ` (${item.event})`;
-                                }
-                                output += `</li>`;
-                            });
-                            output += `</ul></div>`;
-                        }
-                        
-                        // Add unsupported features
-                        if (analysis.unsupported && analysis.unsupported.length > 0) {
-                            output += `<div class="compatibility-section unsupported-section">
-                                <strong>Not Supported in F5 Distributed Cloud:</strong>
-                                <ul>`;
-                            analysis.unsupported.forEach(item => {
-                                output += `<li>${item.feature}`;
-                                if (item.note) {
-                                    output += ` - ${item.note}`;
-                                }
-                                if (item.event) {
-                                    output += ` (${item.event})`;
-                                }
-                                output += `</li>`;
-                            });
-                            output += `</ul></div>`;
-                        }
-                        
-                        // Add warnings
-                        if (analysis.warnings && analysis.warnings.length > 0) {
-                            output += `<div class="compatibility-section warning-section">
-                                <strong>Migration Considerations:</strong>
-                                <ul>`;
-                            analysis.warnings.forEach(item => {
-                                output += `<li>${item.feature}`;
-                                if (item.note) {
-                                    output += ` - ${item.note}`;
-                                }
-                                if (item.event) {
-                                    output += ` (${item.event})`;
-                                }
-                                output += `</li>`;
-                            });
-                            output += `</ul></div>`;
-                        }
+        }
+    });
+
+    // Links: Pool → Node
+    virtualServers.forEach(vs => {
+        if (vs.pool && vs.pool_members) {
+            const poolId = `pool-${vs.pool}`;
+            vs.pool_members.forEach(member => {
+                const nodeId = `node-${member.name}`;
+                if (nodeMap[poolId] !== undefined && nodeMap[nodeId] !== undefined) {
+                    links.push({
+                        source: poolId,
+                        target: nodeId,
+                        value: 1,
+                        compatibility: determineCompatibility(vs)
                     });
-                    
-                    output += `</div>`; // Close the content div
                 }
-            } else {
-                output += '<p class="info-item"><strong>iRules:</strong> No iRules found.</p>';
-            }
-            
-            // Compatibility sections
-            output += createCompatibilitySection('NGINX', vs.nginx_compatibility);
-            output += createCompatibilitySection('F5 Distributed Cloud', vs.f5dc_compatibility);
-            
-            // F5 Distributed Cloud Warnings section (new)
-            if (vs.f5dc_warnings && vs.f5dc_warnings.length > 0) {
-                output += `
-                    <div class="compatibility-section warning-section">
-                        <strong>F5 Distributed Cloud Warnings:</strong>
-                        <ul class="issue-list">
-                            ${vs.f5dc_warnings.map(item => `<li>${item}</li>`).join('')}
-                        </ul>
-                    </div>
-                `;
-            }
-            
-            output += '</div>'; // Close detail-section
-            output += '</div>'; // Close content
+            });
+        }
+    });
+
+    // Links: VIP → iRule
+    virtualServers.forEach(vs => {
+        if (vs.irules) {
+            const sourceId = `vip-${vs.name}`;
+            vs.irules.forEach(rule => {
+                const targetId = `irule-${rule}`;
+                if (nodeMap[sourceId] !== undefined && nodeMap[targetId] !== undefined) {
+                    let compatibility = determineCompatibility(vs);
+                    if (vs.irules_analysis) {
+                        const analysis = vs.irules_analysis.find(r => r.name === rule || r.fullPath === rule);
+                        if (analysis?.analysis?.unsupported?.length > 0) {
+                            compatibility = 'incompatible';
+                        } else if (analysis?.analysis?.alternatives?.length > 0) {
+                            compatibility = 'warning';
+                        }
+                    }
+                    links.push({
+                        source: sourceId,
+                        target: targetId,
+                        value: 1,
+                        compatibility: compatibility
+                    });
+                }
+            });
+        }
+    });
+
+    // Add default geometry to nodes
+    const nodesWithDefaults = nodes.map((node, i) => ({
+        ...node,
+        index: i,
+        x0: 0,
+        x1: 0,
+        y0: 0,
+        y1: 0
+    }));
+
+    // Create ID lookup
+    const nodeById = Object.fromEntries(nodesWithDefaults.map(n => [n.id, n]));
+
+    // Replace string-based IDs in links with full node objects
+    const linksWithReferences = links.map(link => {
+        const sourceNode = nodeById[link.source];
+        const targetNode = nodeById[link.target];
+
+        if (!sourceNode || !targetNode) {
+            console.error('Invalid link (missing node):', link);
+            return null;
+        }
+
+        console.log('Creating link:', {
+            sourceId: link.source,
+            targetId: link.target,
+            sourceNode: sourceNode.name,
+            targetNode: targetNode.name,
+            sourcePos: { x0: sourceNode.x0, x1: sourceNode.x1, y0: sourceNode.y0, y1: sourceNode.y1 },
+            targetPos: { x0: targetNode.x0, x1: targetNode.x1, y0: targetNode.y0, y1: targetNode.y1 }
         });
+
+        return {
+            ...link,
+            source: sourceNode,
+            target: targetNode
+        };
+    }).filter(Boolean);
+
+    return {
+        nodes: nodesWithDefaults,
+        links: linksWithReferences
+    };
+}
+
+
+function debugConnectionPoints(svg, data) {
+    // Add debug points for each link's source and target
+    data.links.forEach(link => {
+        // Ensure link.source and link.target are valid objects
+        if (!link.source || !link.target) {
+            console.error('Invalid link source or target:', link);
+            return;
+        }
+        
+        // Source point (right edge of source node)
+        const sourceX = link.source.x1 || 0;
+        const sourceY = link.source.centerY || (link.source.y0 + (link.source.y1 - link.source.y0) / 2) || 0;
+        
+        // Target point (left edge of target node)
+        const targetX = link.target.x0 || 0;
+        const targetY = link.target.centerY || (link.target.y0 + (link.target.y1 - link.target.y0) / 2) || 0;
+        
+        // Check for NaN values and log them
+        if (isNaN(sourceX) || isNaN(sourceY) || isNaN(targetX) || isNaN(targetY)) {
+            console.error('NaN coordinates found:', { 
+                sourceX, 
+                sourceY, 
+                targetX, 
+                targetY, 
+                sourceNode: link.source, 
+                targetNode: link.target 
+            });
+            return; // Skip this link
+        }
+        
+        // Draw source point (red)
+        svg.append('circle')
+            .attr('cx', sourceX)
+            .attr('cy', sourceY)
+            .attr('r', 4)
+            .attr('fill', 'red');
+            
+        // Draw target point (green)
+        svg.append('circle')
+            .attr('cx', targetX)
+            .attr('cy', targetY)
+            .attr('r', 4)
+            .attr('fill', 'green');
+            
+        // Add debug text for node names - with checks for NaN
+        if (!isNaN(sourceY)) {
+            svg.append('text')
+                .attr('x', sourceX)
+                .attr('y', sourceY - 10)
+                .attr('fill', 'red')
+                .attr('font-size', '10px')
+                .text(link.source.name || 'Unknown');
+        }
+            
+        if (!isNaN(targetY)) {
+            svg.append('text')
+                .attr('x', targetX)
+                .attr('y', targetY - 10)
+                .attr('fill', 'green')
+                .attr('font-size', '10px')
+                .text(link.target.name || 'Unknown');
+        }
+    });
+}
+
+
+/**
+ * Determine compatibility status of a component
+ * @param {Object} component - Component to check (VIP, iRule, etc.)
+ * @returns {string} - 'compatible', 'warning', or 'incompatible'
+ */
+function determineCompatibility(component) {
+    if (!component) return 'compatible';
+    
+    // Check for incompatibilities
+    if (component.f5dc_compatibility && component.f5dc_compatibility.length > 0) {
+        return 'incompatible';
+    }
+    
+    // Check for warnings
+    if (component.f5dc_warnings && component.f5dc_warnings.length > 0) {
+        return 'warning';
+    }
+    
+    // If no issues found, it's compatible
+    return 'compatible';
+}
+
+/**
+ * Render the Sankey diagram with the provided data
+ * @param {Object} data - Sankey diagram data (nodes and links)
+ */
+function renderSankeyDiagram(data) {
+    const container = document.getElementById('sankeyContainer');
+    if (!container) return;
+
+    container.innerHTML = '';
+
+    const width = container.clientWidth;
+    const height = container.clientHeight || 600;
+
+    const svg = d3.select(container)
+        .append('svg')
+        .attr('width', width)
+        .attr('height', height);
+
+    const defs = svg.append('defs');
+
+    // Background gradient
+    const bgGradient = defs.append('linearGradient')
+        .attr('id', 'bgGradient')
+        .attr('x1', '0%').attr('y1', '0%')
+        .attr('x2', '100%').attr('y2', '100%');
+    bgGradient.append('stop').attr('offset', '0%').attr('stop-color', '#1a1a1a');
+    bgGradient.append('stop').attr('offset', '100%').attr('stop-color', '#252525');
+
+    // Define gradients
+    defineGradient(defs, 'blueGradient', '#1E88E5', '#64B5F6');
+    defineGradient(defs, 'yellowGradient', '#FFC107', '#FFECB3');
+    defineGradient(defs, 'redGradient', '#F44336', '#FFCDD2');
+    defineGradient(defs, 'vipGradient', '#0d47a1', '#1565c0', 'y');
+    defineGradient(defs, 'poolGradient', '#1a237e', '#303f9f', 'y');
+    defineGradient(defs, 'nodeGradient', '#4a148c', '#6a1b9a', 'y');
+    defineGradient(defs, 'iruleGradient', '#006064', '#00838f', 'y');
+
+    svg.append('rect')
+        .attr('width', width)
+        .attr('height', height)
+        .attr('fill', 'url(#bgGradient)');
+
+    // Padded column layout
+    const padding = 100;
+    const columnWidth = (width - padding * 2) / 4;
+    const columnPositions = [
+        padding + columnWidth * 0,
+        padding + columnWidth * 1,
+        padding + columnWidth * 2,
+        padding + columnWidth * 3
+    ];
+
+    const columnLabels = ['VIRTUAL SERVERS', 'POOLS', 'NODES', 'iRULES'];
+    columnLabels.forEach((label, i) => {
+        svg.append('text')
+            .attr('x', columnPositions[i])
+            .attr('y', 30)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#aaa')
+            .attr('font-size', '14px')
+            .text(label);
+    });
+
+    if (!data || !data.nodes || data.nodes.length === 0) {
+        svg.append('text')
+            .attr('x', width / 2)
+            .attr('y', height / 2)
+            .attr('text-anchor', 'middle')
+            .attr('fill', '#999')
+            .attr('font-size', '16px')
+            .text('No data available to visualize');
+        return;
+    }
+
+    // Organize and position nodes
+    const nodesByColumn = [[], [], [], []];
+    data.nodes.forEach(node => {
+        if (typeof node.column === 'number') {
+            nodesByColumn[node.column].push(node);
+        }
+    });
+
+    nodesByColumn.forEach((columnNodes, colIndex) => {
+        const columnX = columnPositions[colIndex] || (200 * colIndex + 100);
+        const nodeHeight = 40;
+        const nodePadding = 10;
+        const totalHeight = columnNodes.length * nodeHeight + (columnNodes.length - 1) * nodePadding;
+        const startY = (height - totalHeight) / 2;
+
+        columnNodes.forEach((node, i) => {
+            node.x0 = Math.max(0, columnX - 75);
+            node.x1 = node.x0 + 150;
+            node.y0 = startY + i * (nodeHeight + nodePadding);
+            node.y1 = node.y0 + nodeHeight;
+            node.centerX = (node.x0 + node.x1) / 2;
+            node.centerY = (node.y0 + node.y1) / 2;
+
+            console.log(`Positioned ${node.name} [${node.type}] at x0=${node.x0}, x1=${node.x1}, centerY=${node.centerY}`);
+        });
+    });
+
+    // Draw links
+    const linkGroup = svg.append('g').attr('class', 'links');
+    data.links.forEach(link => {
+        const s = link.source;
+        const t = link.target;
+        if (!s || !t) return;
+
+        const sourceX = s.x1;
+        const sourceY = s.centerY;
+        const targetX = t.x0;
+        const targetY = t.centerY;
+
+        if ([sourceX, sourceY, targetX, targetY].some(isNaN)) {
+            console.warn('Skipping link due to NaN:', link);
+            return;
+        }
+
+        let linkColor = 'url(#blueGradient)';
+        if (link.compatibility === 'warning') linkColor = 'url(#yellowGradient)';
+        else if (link.compatibility === 'incompatible') linkColor = 'url(#redGradient)';
+        const yOffset = Math.abs(targetY - sourceY) < 2 ? 20 : 0;
+        linkGroup.append('path')
+
+            .attr('d', `M ${sourceX},${sourceY} C ${sourceX + 50},${sourceY + yOffset} ${targetX - 50},${targetY - yOffset} ${targetX},${targetY}`)
+            .attr('stroke', linkColor)
+            .attr('stroke-width', 15)
+            .attr('fill', 'none')
+            .attr('opacity', 0.9)
+            .attr('cursor', 'pointer')
+            .on('mouseover', function () {
+                d3.select(this).attr('stroke-width', 20).attr('opacity', 1.0);
+            })
+            .on('mouseout', function () {
+                d3.select(this).attr('stroke-width', 15).attr('opacity', 0.9);
+            });
+
+        console.log(`Drawing link from ${s.name} to ${t.name} at (${sourceX},${sourceY}) → (${targetX},${targetY})`);
+    });
+
+    // Draw nodes
+    const nodeGroup = svg.append('g').attr('class', 'nodes');
+    data.nodes.forEach(node => {
+        let gradient;
+        switch (node.type) {
+            case 'vip': gradient = 'url(#vipGradient)'; break;
+            case 'pool': gradient = 'url(#poolGradient)'; break;
+            case 'node': gradient = 'url(#nodeGradient)'; break;
+            case 'irule': gradient = 'url(#iruleGradient)'; break;
+            default: gradient = '#555';
+        }
+
+        const group = nodeGroup.append('g')
+            .attr('transform', `translate(${node.x0},${node.y0})`)
+            .attr('cursor', 'pointer')
+            .on('click', () => showComponentDetails(node));
+
+        group.append('rect')
+            .attr('width', node.x1 - node.x0)
+            .attr('height', node.y1 - node.y0)
+            .attr('fill', gradient)
+            .attr('rx', 4)
+            .attr('ry', 4)
+            .attr('stroke', '#444')
+            .attr('stroke-width', 1);
+
+        group.append('text')
+            .attr('x', (node.x1 - node.x0) / 2)
+            .attr('y', (node.y1 - node.y0) / 2)
+            .attr('dy', '0.35em')
+            .attr('text-anchor', 'middle')
+            .attr('fill', 'white')
+            .attr('font-size', '13px')
+            .text(node.name);
+
+        if (node.type === 'vip' && node.details?.destination) {
+            group.append('text')
+                .attr('x', (node.x1 - node.x0) / 2)
+                .attr('y', (node.y1 - node.y0) / 2 + 15)
+                .attr('dy', '0.35em')
+                .attr('text-anchor', 'middle')
+                .attr('fill', '#bbb')
+                .attr('font-size', '11px')
+                .text(node.details.destination);
+        }
+    });
+}
+
+
+
+/**
+ * Define a gradient in the SVG defs section
+ * @param {Object} defs - The SVG defs element
+ * @param {string} id - ID for the gradient
+ * @param {string} color1 - Start color
+ * @param {string} color2 - End color
+ * @param {string} direction - 'x' for horizontal, 'y' for vertical
+ */
+function defineGradient(defs, id, color1, color2, direction = 'x') {
+    const gradient = defs.append('linearGradient')
+        .attr('id', id);
+    
+    if (direction === 'x') {
+        gradient.attr('x1', '0%').attr('y1', '0%')
+               .attr('x2', '100%').attr('y2', '0%');
     } else {
-        output += '<p>No virtual servers found.</p>';
+        gradient.attr('x1', '0%').attr('y1', '0%')
+               .attr('x2', '0%').attr('y2', '100%');
     }
     
-    output += '</div>'; // Close standardView
+    gradient.append('stop')
+        .attr('offset', '0%')
+        .attr('stop-color', color1)
+        .attr('stop-opacity', 1.0); // Full opacity
 
-    return output;
+    gradient.append('stop')
+        .attr('offset', '100%')
+        .attr('stop-color', color2)
+        .attr('stop-opacity', 1.0); // Full opacity
 }
 
-// Setup toggle between standard view and Sankey diagram
-function setupViewToggle() {
-    const viewSelector = document.getElementById('viewSelector');
-    const standardView = document.getElementById('standardView');
-    const sankeyView = document.getElementById('sankeyView');
-    const filterControls = document.getElementById('filterControls');
+/**
+ * Show component details in the details panel
+ * @param {Object} component - The node to show details for
+ */
+function showComponentDetails(component) {
+    const detailsPanel = document.getElementById('detailsPanel');
+    if (!detailsPanel) return;
     
-    if (viewSelector) {
-        viewSelector.addEventListener('change', function() {
-            if (this.value === 'sankey') {
-                standardView.style.display = 'none';
-                sankeyView.style.display = 'block';
-                filterControls.style.display = 'block';
-                // Refresh the Sankey diagram (in case window was resized)
-                refreshSankeyDiagram();
-            } else {
-                standardView.style.display = 'block';
-                sankeyView.style.display = 'none';
-                filterControls.style.display = 'none';
-            }
-        });
+    let html = '';
+    let details = component.details;
+    
+    switch(component.type) {
+        case 'vip':
+            html = createVipDetailsHTML(details);
+            break;
+        case 'pool':
+            html = createPoolDetailsHTML(component.name);
+            break;
+        case 'node':
+            html = createNodeDetailsHTML(component.name);
+            break;
+        case 'irule':
+            html = createIRuleDetailsHTML(details, component.name);
+            break;
+        default:
+            html = `<div class="placeholder-panel">
+                        <h3>No details available</h3>
+                        <p>No detailed information is available for this component.</p>
+                    </div>`;
     }
     
-    // Setup filter controls
-    const filterType = document.getElementById('filterType');
-    const searchFilter = document.getElementById('searchFilter');
-    const applyFiltersBtn = document.getElementById('applyFilters');
-    
-    if (applyFiltersBtn) {
-        applyFiltersBtn.addEventListener('click', function() {
-            applyFilters();
-        });
-    }
-    
-    if (searchFilter) {
-        searchFilter.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') {
-                applyFilters();
-            }
-        });
-    }
+    detailsPanel.innerHTML = html;
 }
 
-function applyFilters() {
-    const filterType = document.getElementById('filterType').value;
-    const searchText = document.getElementById('searchFilter').value.toLowerCase();
+/**
+ * Create HTML for VIP details
+ * @param {Object} vip - Virtual server details
+ * @returns {string} - HTML for details panel
+ */
+function createVipDetailsHTML(vip) {
+    if (!vip) return '';
     
-    // Apply filters to the Sankey diagram
-    filterSankeyData(filterType, searchText);
-}
-
-// helper function
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-}
-
-function createSummaryItem(title, count) {
-    return `
-        <div class="summary-item">
-            <h3>${title}</h3>
-            <p>${count}</p>
+    let html = `
+        <h3>${vip.name} (Virtual Server)</h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <div><strong>Destination:</strong> ${vip.destination}</div>
+            <div><strong>Pool:</strong> ${vip.pool || 'None'}</div>
         </div>
     `;
-}
-
-function createCompatibilitySection(name, issues) {
-    if (issues && issues.length > 0) {
-        return `
+    
+    // Pool Members
+    if (vip.pool_members && vip.pool_members.length > 0) {
+        html += '<div style="margin-bottom: 15px;"><strong>Pool Members:</strong>';
+        html += '<table><tr><th>Name</th><th>Address</th></tr>';
+        vip.pool_members.forEach(member => {
+            html += `<tr><td>${member.name}</td><td>${member.address}</td></tr>`;
+        });
+        html += '</table></div>';
+    }
+    
+    // iRules
+    if (vip.irules && vip.irules.length > 0) {
+        html += '<div style="margin-bottom: 15px;"><strong>iRules:</strong><ul>';
+        vip.irules.forEach(rule => {
+            html += `<li>${rule}</li>`;
+        });
+        html += '</ul></div>';
+    }
+    
+    // Compatibility issues
+    if (vip.f5dc_compatibility && vip.f5dc_compatibility.length > 0) {
+        html += `
             <div class="compatibility-section incompatible">
-                <strong>${name} Compatibility Issues:</strong>
+                <strong>F5 Distributed Cloud Compatibility Issues:</strong>
                 <ul class="issue-list">
-                    ${issues.map(item => `<li>${item}</li>`).join('')}
+                    ${vip.f5dc_compatibility.map(item => `<li>${item}</li>`).join('')}
+                </ul>
+            </div>
+        `;
+    } else if (vip.f5dc_warnings && vip.f5dc_warnings.length > 0) {
+        html += `
+            <div class="compatibility-section warning-section">
+                <strong>F5 Distributed Cloud Warnings:</strong>
+                <ul class="issue-list">
+                    ${vip.f5dc_warnings.map(item => `<li>${item}</li>`).join('')}
                 </ul>
             </div>
         `;
     } else {
-        return `
+        html += `
             <div class="compatibility-section compatible">
-                <strong>${name} Compatibility:</strong> ✓ Fully compatible
+                <strong>F5 Distributed Cloud Compatibility:</strong> ✓ Fully compatible
             </div>
         `;
     }
+    
+    return html;
 }
 
-// Function to download the analysis results as JSON
-function downloadResults(data) {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(data, null, 2));
-    const downloadAnchorNode = document.createElement('a');
-    downloadAnchorNode.setAttribute("href", dataStr);
-    downloadAnchorNode.setAttribute("download", "f5_analysis_results.json");
-    document.body.appendChild(downloadAnchorNode);
-    downloadAnchorNode.click();
-    downloadAnchorNode.remove();
+/**
+ * Create HTML for Pool details
+ * @param {string} poolName - Pool name
+ * @returns {string} - HTML for details panel
+ */
+function createPoolDetailsHTML(poolName) {
+    // Try to find the pool in any of the virtual servers
+    let poolInfo = null;
+    let poolMembers = [];
+    
+    for (const vs of filteredVirtualServers) {
+        if (vs.pool === poolName) {
+            poolInfo = {
+                name: poolName,
+                virtual_server: vs.name,
+                destination: vs.destination
+            };
+            poolMembers = vs.pool_members || [];
+            break;
+        }
+    }
+    
+    if (!poolInfo) {
+        return `
+            <div class="placeholder-panel">
+                <h3>${poolName} (Pool)</h3>
+                <p>No detailed information is available for this pool.</p>
+            </div>
+        `;
+    }
+    
+    let html = `
+        <h3>${poolInfo.name} (Pool)</h3>
+        <div style="margin-bottom: 15px;">
+            <div><strong>Used by Virtual Server:</strong> ${poolInfo.virtual_server}</div>
+        </div>
+    `;
+    
+    // Pool Members
+    if (poolMembers.length > 0) {
+        html += '<div style="margin-bottom: 15px;"><strong>Pool Members:</strong>';
+        html += '<table><tr><th>Name</th><th>Address</th></tr>';
+        poolMembers.forEach(member => {
+            html += `<tr><td>${member.name}</td><td>${member.address}</td></tr>`;
+        });
+        html += '</table></div>';
+    } else {
+        html += '<div style="margin-bottom: 15px;"><strong>Pool Members:</strong> No members found</div>';
+    }
+    
+    return html;
 }
 
-// Console log helper for debugging
-function logObject(obj, label = 'Debug') {
-    console.log(`=== ${label} ===`);
-    console.log(JSON.stringify(obj, null, 2));
+/**
+ * Create HTML for Node details
+ * @param {string} nodeName - Node name
+ * @returns {string} - HTML for details panel
+ */
+function createNodeDetailsHTML(nodeName) {
+    // Try to find the node in any of the virtual servers
+    let nodeInfo = null;
+    
+    for (const vs of filteredVirtualServers) {
+        if (vs.pool_members) {
+            const member = vs.pool_members.find(m => m.name === nodeName);
+            if (member) {
+                nodeInfo = {
+                    name: nodeName,
+                    address: member.address,
+                    pool: vs.pool,
+                    virtual_server: vs.name
+                };
+                break;
+            }
+        }
+    }
+    
+    if (!nodeInfo) {
+        return `
+            <div class="placeholder-panel">
+                <h3>${nodeName} (Node)</h3>
+                <p>No detailed information is available for this node.</p>
+            </div>
+        `;
+    }
+    
+    let html = `
+        <h3>${nodeInfo.name} (Node)</h3>
+        <div style="margin-bottom: 15px;">
+            <div><strong>Address:</strong> ${nodeInfo.address || 'Unknown'}</div>
+            <div><strong>Pool:</strong> ${nodeInfo.pool || 'Unknown'}</div>
+            <div><strong>Used by Virtual Server:</strong> ${nodeInfo.virtual_server || 'Unknown'}</div>
+        </div>
+    `;
+    
+    return html;
 }
-    </script>
-</body>
-</html>
+
+/**
+ * Create HTML for iRule details
+ * @param {Object} irule - iRule details
+ * @param {string} ruleName - iRule name
+ * @returns {string} - HTML for details panel
+ */
+function createIRuleDetailsHTML(irule, ruleName) {
+    if (!irule) {
+        // Try to find the iRule in any of the virtual servers
+        for (const vs of filteredVirtualServers) {
+            if (vs.irules_analysis) {
+                const ruleAnalysis = vs.irules_analysis.find(r => r.name === ruleName || r.fullPath === ruleName);
+                if (ruleAnalysis) {
+                    irule = ruleAnalysis;
+                    break;
+                }
+            }
+        }
+    }
+    
+    if (!irule) {
+        return `
+            <div class="placeholder-panel">
+                <h3>${ruleName} (iRule)</h3>
+                <p>No detailed information is available for this iRule.</p>
+            </div>
+        `;
+    }
+    
+    // Determine compatibility status
+    let compatibilityStatus = 'compatible';
+    let compatibilityText = '✓ Fully compatible';
+    
+    const analysis = irule.analysis || {};
+    
+    if (analysis.unsupported && analysis.unsupported.length > 0) {
+        compatibilityStatus = 'incompatible';
+        compatibilityText = '✗ Incompatible';
+    } else if (analysis.alternatives && analysis.alternatives.length > 0) {
+        compatibilityStatus = 'warning';
+        compatibilityText = '⚠️ Requires Changes';
+    }
+    
+    // Determine events
+    let eventsText = 'None';
+    if (analysis.events && Object.keys(analysis.events).length > 0) {
+        eventsText = Object.keys(analysis.events).join(', ');
+    }
+    
+    let html = `
+        <h3>${irule.name} (iRule)</h3>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 15px;">
+            <div><strong>Compatibility:</strong> <span class="${compatibilityStatus}">${compatibilityText}</span></div>
+            <div><strong>Events:</strong> ${eventsText}</div>
+        </div>
+    `;
+    
+    // Add iRule content if available
+    if (irule.content || irule.tcl_content) {
+        const iruleContent = irule.content || irule.tcl_content;
+        html += `
+            <div style="margin-bottom: 20px;">
+                <div class="code-block">
+                    ${formatIRuleCode(iruleContent)}
+                </div>
+            </div>
+        `;
+    }
+    
+    // Add compatibility analysis
+    if (analysis) {
+        // Add mappable features
+        if (analysis.mappable && analysis.mappable.length > 0) {
+            html += `<div class="compatibility-section mappable-section">
+                <strong>Mappable to F5 Distributed Cloud:</strong>
+                <ul>`;
+            analysis.mappable.forEach(item => {
+                html += `<li>${item.feature}`;
+                if (item.service_policy) {
+                    html += ` - ${item.service_policy}`;
+                }
+                if (item.event) {
+                    html += ` (${item.event})`;
+                }
+                html += `</li>`;
+            });
+            html += `</ul></div>`;
+        }
+        
+        // Add features requiring alternatives
+        if (analysis.alternatives && analysis.alternatives.length > 0) {
+            html += `<div class="compatibility-section alternatives-section">
+                <strong>Requires Alternatives in F5 Distributed Cloud:</strong>
+                <ul>`;
+            analysis.alternatives.forEach(item => {
+                html += `<li>${item.feature}`;
+                if (item.alternative) {
+                    html += ` - ${item.alternative}`;
+                }
+                if (item.event) {
+                    html += ` (${item.event})`;
+                }
+                html += `</li>`;
+            });
+            html += `</ul></div>`;
+        }
+        
+        // Add unsupported features
+        if (analysis.unsupported && analysis.unsupported.length > 0) {
+            html += `<div class="compatibility-section unsupported-section">
+                <strong>Not Supported in F5 Distributed Cloud:</strong>
+                <ul>`;
+            analysis.unsupported.forEach(item => {
+                html += `<li>${item.feature}`;
+                if (item.note) {
+                    html += ` - ${item.note}`;
+                }
+                if (item.event) {
+                    html += ` (${item.event})`;
+                }
+                html += `</li>`;
+            });
+            html += `</ul></div>`;
+        }
+        
+        // Add warnings
+        if (analysis.warnings && analysis.warnings.length > 0) {
+            html += `<div class="compatibility-section warning-section">
+                <strong>Migration Considerations:</strong>
+                <ul>`;
+            analysis.warnings.forEach(item => {
+                html += `<li>${item.feature}`;
+                if (item.note) {
+                    html += ` - ${item.note}`;
+                }
+                if (item.event) {
+                    html += ` (${item.event})`;
+                }
+                html += `</li>`;
+            });
+            html += `</ul></div>`;
+        }
+    }
+    
+    return html;
+}
+
+/**
+ * Format iRule code with syntax highlighting
+ * @param {string} code - iRule code to format
+ * @returns {string} - HTML with syntax highlighting
+ */
+function formatIRuleCode(code) {
+    if (!code) return '';
+    
+    // Simple syntax highlighting for TCL/iRule
+    return code
+        .replace(/\b(when|if|else|foreach|set|switch|case|default|proc)\b/g, '<span class="code-keyword">$1</span>')
+        .replace(/"([^"]*)"/g, '<span class="code-string">"$1"</span>')
+        .replace(/\b(HTTP::uri|HTTP::header|string|map|exists|remove|insert|class|pool|node|virtual|clientside|serverside)\b/g, '<span class="code-function">$1</span>')
+        .replace(/#.*/g, '<span class="code-comment">$&</span>');
+}
+
+/**
+ * Set up pagination controls
+ */
+function setupPagination() {
+    updatePaginationControls();
+    
+    // Add event listener for window resize to update pagination if needed
+    window.addEventListener('resize', debounce(() => {
+        if (document.getElementById('sankeyView').style.display !== 'none') {
+            updatePaginationControls();
+        }
+    }, 250));
+}
+
+/**
+ * Update pagination controls based on current data
+ */
+function updatePaginationControls() {
+    const paginationControls = document.getElementById('paginationControls');
+    if (!paginationControls) return;
+    
+    const totalPages = Math.ceil(filteredVirtualServers.length / itemsPerPage);
+    
+    let paginationHTML = '';
+    
+    // Previous button
+    paginationHTML += `<button ${currentPage === 1 ? 'disabled' : ''} data-page="prev">« Prev</button>`;
+    
+    // Page buttons
+    for (let i = 1; i <= totalPages; i++) {
+        paginationHTML += `<button ${i === currentPage ? 'class="active"' : ''} data-page="${i}">${i}</button>`;
+    }
+    
+    // Next button
+    paginationHTML += `<button ${currentPage === totalPages ? 'disabled' : ''} data-page="next">Next »</button>`;
+    
+    paginationControls.innerHTML = paginationHTML;
+    
+    // Add event listeners to pagination buttons
+    const buttons = paginationControls.querySelectorAll('button');
+    buttons.forEach(button => {
+        button.addEventListener('click', function() {
+            const page = this.getAttribute('data-page');
+            
+            if (page === 'prev' && currentPage > 1) {
+                currentPage--;
+            } else if (page === 'next' && currentPage < totalPages) {
+                currentPage++;
+            } else if (page !== 'prev' && page !== 'next') {
+                currentPage = parseInt(page);
+            }
+            
+            updatePaginationControls();
+            updateSankeyVisualization();
+        });
+    });
+}
+
+/**
+ * Filter the Sankey data based on selected filters
+ * @param {string} filterType - Type of filter to apply
+ * @param {string} searchText - Text to search for
+ */
+function filterSankeyData(filterType, searchText) {
+    // Start with all virtual servers
+    filteredVirtualServers = [...allVirtualServers];
+    
+    // Apply filter by type
+    switch (filterType) {
+        case 'http':
+            // Filter for HTTP virtual servers (typically port 80, 443, 8080, 8443)
+            filteredVirtualServers = filteredVirtualServers.filter(vs => {
+                const destination = vs.destination || '';
+                return destination.includes(':80') || 
+                       destination.includes(':443') || 
+                       destination.includes(':8080') || 
+                       destination.includes(':8443');
+            });
+            break;
+        case 'tcp':
+            // Filter for non-HTTP virtual servers
+            filteredVirtualServers = filteredVirtualServers.filter(vs => {
+                const destination = vs.destination || '';
+                return !destination.includes(':80') && 
+                       !destination.includes(':443') && 
+                       !destination.includes(':8080') && 
+                       !destination.includes(':8443');
+            });
+            break;
+        case 'issues':
+            // Filter for virtual servers with compatibility issues
+            filteredVirtualServers = filteredVirtualServers.filter(vs => {
+                return (vs.f5dc_compatibility && vs.f5dc_compatibility.length > 0) || 
+                       (vs.f5dc_warnings && vs.f5dc_warnings.length > 0) ||
+                       (vs.nginx_compatibility && vs.nginx_compatibility.length > 0);
+            });
+            break;
+    }
+    
+    // Apply search filter if text is provided
+    if (searchText) {
+        filteredVirtualServers = filteredVirtualServers.filter(vs => {
+            return (vs.name && vs.name.toLowerCase().includes(searchText)) || 
+                   (vs.destination && vs.destination.toLowerCase().includes(searchText)) ||
+                   (vs.pool && vs.pool.toLowerCase().includes(searchText));
+        });
+    }
+    
+    // Reset to first page
+    currentPage = 1;
+    
+    // Update pagination and visualization
+    updatePaginationControls();
+    updateSankeyVisualization();
+}
+
+/**
+ * Debounce function to limit how often a function can be called
+ * @param {Function} func - Function to debounce
+ * @param {number} wait - Time to wait in milliseconds
+ * @returns {Function} - Debounced function
+ */
+function debounce(func, wait) {
+    let timeout;
+    return function(...args) {
+        const context = this;
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(context, args), wait);
+    };
+}
