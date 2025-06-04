@@ -64,8 +64,8 @@ services:
     volumes:
       - ./f5-analyzer:/app
       - ./certs:/app/certs  # Mount certificate directory
-    env_file: 
-      - ".env"
+    command: gunicorn --certfile=/app/certs/cert.pem --keyfile=/app/certs/key.pem --bind=0.0.0.0:5443 --ssl-version=TLSv1_2 app:app
+    env_file: ".env"
     environment:
       - CERT_FILE=/app/certs/cert.pem
       - KEY_FILE=/app/certs/key.pem
@@ -74,6 +74,7 @@ services:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=password
       - CLICKHOUSE_DATABASE=f5_analyzer
+      - FLASK_ENV=production
     depends_on:
       - clickhouse
     networks:
