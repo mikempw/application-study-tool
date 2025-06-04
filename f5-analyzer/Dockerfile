@@ -15,7 +15,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 COPY . .
-
+# SSL certificates for demos
+COPY ./cert.pem /app/cert.pem
+COPY ./key.pem /app/key.pem
 EXPOSE 5000
 
 CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
