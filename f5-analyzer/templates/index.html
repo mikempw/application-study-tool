@@ -677,8 +677,7 @@
         <input type="submit" value="Analyze">
     </form>
     <div id="results"></div>
-
-    <script src="sankey.js"></script> <!-- New script file for Sankey diagram functionality -->
+    <script src="{{ url_for('static', filename='js/sankey.js') }}"></script>
     <script>
 document.getElementById('analyzeForm').onsubmit = function(e) {
     e.preventDefault();
